@@ -2,6 +2,14 @@
 
 Cara menjalankan dari root project Laravel:
     python storage/models/train_models.py
+
+Tahapan ML di script ini DIBUAT IDENTIK dengan notebook
+notebooks/mental_health_ml.ipynb (kecuali bagian visualisasi):
+  - random_state untuk train_test_split = 0
+  - random_state untuk DecisionTree = 42
+  - StandardScaler fit di train, transform test
+  - Parameter model = hasil HPO (KNN n=39; SVM C=10,gamma=0.01,rbf;
+    DT entropy,max_depth=10,min_split=2,min_leaf=2)
 """
 from __future__ import annotations
 import json
@@ -26,8 +34,15 @@ from sklearn.tree import DecisionTreeClassifier
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DATA_PATH = SCRIPT_DIR / "data" / "mental_health_risk_dataset.csv"
-RANDOM_STATE = 42
-MAX_TRAIN_ROWS = int(os.environ.get("MAX_TRAIN_ROWS", "10000"))
+
+# random_state split = 0 supaya identik dengan notebook
+SPLIT_RANDOM_STATE = 0
+# random_state model = 42 supaya identik dengan notebook
+MODEL_RANDOM_STATE = 42
+
+# Default 0 = pakai FULL dataset (sesuai notebook).
+# Set angka > 0 lewat env var jika butuh subsample untuk laptop lemah.
+MAX_TRAIN_ROWS = int(os.environ.get("MAX_TRAIN_ROWS", "0"))
 
 CATEGORICAL_COLS = ["gender", "marital_status", "education_level", "employment_status"]
 TARGET_COL = "mental_health_risk"
@@ -73,17 +88,19 @@ def main() -> None:
     if MAX_TRAIN_ROWS and len(df) > MAX_TRAIN_ROWS:
         df, _ = train_test_split(
             df, train_size=MAX_TRAIN_ROWS,
-            random_state=RANDOM_STATE, stratify=df[TARGET_COL],
+            random_state=SPLIT_RANDOM_STATE, stratify=df[TARGET_COL],
         )
         df = df.reset_index(drop=True)
         print(f"      -> Stratified subsample: {df.shape} (MAX_TRAIN_ROWS={MAX_TRAIN_ROWS})")
+    else:
+        print("      -> Pakai FULL dataset (sesuai notebook)")
 
     X = df[feature_names].values
     y = df[TARGET_COL].values
     print(f"\n[4/7] X={X.shape}, y={y.shape}")
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=y
+        X, y, test_size=0.3, random_state=SPLIT_RANDOM_STATE, stratify=y
     )
     print(f"      Train: {X_train.shape}  Test: {X_test.shape}")
 
@@ -92,11 +109,18 @@ def main() -> None:
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
 
-    print("\n[6/7] Training 3 algoritma")
+    print("\n[6/7] Training 3 algoritma (parameter sesuai HPO di notebook)")
     models = {
-        "KNN": KNeighborsClassifier(n_neighbors=7, weights="distance"),
-        "SVM": SVC(kernel="rbf", C=1.0, probability=True, random_state=RANDOM_STATE, cache_size=500),
-        "Decision Tree": DecisionTreeClassifier(max_depth=10, random_state=RANDOM_STATE),
+        "KNN": KNeighborsClassifier(n_neighbors=39),
+        "SVM": SVC(
+            kernel="rbf", C=10, gamma=0.01, probability=True,
+            random_state=MODEL_RANDOM_STATE, cache_size=500,
+        ),
+        "Decision Tree": DecisionTreeClassifier(
+            criterion="entropy", max_depth=10,
+            min_samples_split=2, min_samples_leaf=2,
+            random_state=MODEL_RANDOM_STATE,
+        ),
     }
 
     metrics = {}
@@ -119,7 +143,7 @@ def main() -> None:
         print("         Confusion matrix:")
         print(np.array2string(confusion_matrix(y_test, y_pred), prefix="         "))
 
-    print("\n[7/7] Menyimpan model & artifacts ke storage/models/ (pakai pickle)")
+    print("\n[7/7] Menyimpan model & artifacts ke storage/models/")
     _save(models["KNN"], "knn_model.pkl")
     _save(models["SVM"], "svm_model.pkl")
     _save(models["Decision Tree"], "dt_model.pkl")
