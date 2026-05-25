@@ -202,25 +202,25 @@ def main() -> None:
     metrics = {}
 
     # --- KNN (non-HPO) ---
-    # print("\n  >> KNN (non-HPO): n_neighbors=21, metric=manhattan")
-    # knn = KNeighborsClassifier(n_neighbors=21, metric="manhattan")
-    # knn.fit(X_train_s, y_train)
-    # metrics["KNN"] = _eval("KNN", knn, X_test_s, y_test)
+    print("\n  >> KNN (non-HPO): n_neighbors=89, metric=manhattan")
+    knn = KNeighborsClassifier(n_neighbors=89, metric="manhattan")
+    knn.fit(X_train_s, y_train)
+    metrics["KNN"] = _eval("KNN", knn, X_test_s, y_test)
 
     # --- KNN + HPO ---
-    # print("\n  >> KNN+HPO: GridSearchCV (n_neighbors=1..99 odd x metric, cv=5)")
-    # param_grid_knn = {
-    #     "n_neighbors": list(range(1, 100, 2)),   # [1,3,...,99] = 50 nilai
-    #     "metric": ["euclidean", "manhattan"],     # 2 nilai -> 100 kandidat
-    # }
-    # grid_knn = GridSearchCV(
-    #     KNeighborsClassifier(), param_grid_knn,
-    #     scoring="recall_macro", cv=5, refit=True, n_jobs=-1,
-    # )
-    # grid_knn.fit(X_train_s, y_train)
-    # knn_hpo = grid_knn.best_estimator_
-    # print(f"      Best params KNN+HPO: {grid_knn.best_params_}")
-    # metrics["KNN+HPO"] = _eval("KNN+HPO", knn_hpo, X_test_s, y_test)
+    print("\n  >> KNN+HPO: GridSearchCV (n_neighbors=1..99 odd x metric, cv=3)")
+    param_grid_knn = {
+        "n_neighbors": list(range(1, 100, 2)),
+        "metric": ["euclidean", "manhattan"],
+    }
+    grid_knn = GridSearchCV(
+        KNeighborsClassifier(), param_grid_knn,
+        scoring="accuracy", cv=3, refit=True, n_jobs=-1,
+    )
+    grid_knn.fit(X_train_s, y_train)
+    knn_hpo = grid_knn.best_estimator_
+    print(f"      Best params KNN+HPO: {grid_knn.best_params_}")
+    metrics["KNN+HPO"] = _eval("KNN+HPO", knn_hpo, X_test_s, y_test)
 
     # --- SVM (non-HPO) ---
     print("\n  >> SVM (non-HPO): kernel=rbf, C=10, gamma=0.01")
@@ -265,8 +265,8 @@ def main() -> None:
 
     # ----- [7] Simpan artifacts -----
     print("\n[7/7] Menyimpan artifacts ke storage/models/")
-    # _save(knn,             "knn_model.pkl")
-    # _save(knn_hpo,         "knn_hpo_model.pkl")
+    _save(knn,             "knn_model.pkl")
+    _save(knn_hpo,         "knn_hpo_model.pkl")
     _save(svm,             "svm_model.pkl")
     _save(svm_hpo,         "svm_hpo_model.pkl")
     # _save(dt,              "dt_model.pkl")

@@ -30,8 +30,8 @@
 
     @php
     $models = [
-        'knn'     => ['label'=>'KNN',           'desc'=>'K-Nearest Neighbors',         'ready'=>false],
-        'knn_hpo' => ['label'=>'KNN + HPO',     'desc'=>'KNN + Hyperparameter Tuning', 'ready'=>false],
+        'knn'     => ['label'=>'KNN',           'desc'=>'K-Nearest Neighbors',         'ready'=>true],
+        'knn_hpo' => ['label'=>'KNN + HPO',     'desc'=>'KNN + Hyperparameter Tuning', 'ready'=>true],
         'svm'     => ['label'=>'SVM',           'desc'=>'Support Vector Machine',      'ready'=>true],
         'svm_hpo' => ['label'=>'SVM + HPO',     'desc'=>'SVM + Hyperparameter Tuning', 'ready'=>true],
         'dt'      => ['label'=>'Decision Tree', 'desc'=>'Pohon Keputusan',             'ready'=>false],
