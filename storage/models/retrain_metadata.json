@@ -1,8 +1,24 @@
 {
-  "retrains_count": 0,
-  "last_retrain_timestamp": null,
-  "last_retrain_dataset_size": null,
-  "user_data_rows_used": 0,
-  "models_trained": [],
-  "training_metrics": {}
+  "retrains_count": 1,
+  "last_retrain_timestamp": "2026-05-25T02:43:16Z",
+  "last_retrain_dataset_size": 25056,
+  "user_data_rows_used": 56,
+  "models_trained": [
+    "SVM",
+    "SVM+HPO"
+  ],
+  "training_metrics": {
+    "SVM": {
+      "accuracy": 0.8176134096048956,
+      "precision": 0.8187581076530758,
+      "recall": 0.8176134096048956,
+      "f1_score": 0.8172903289237422
+    },
+    "SVM+HPO": {
+      "accuracy": 0.8176134096048956,
+      "precision": 0.8187581076530758,
+      "recall": 0.8176134096048956,
+      "f1_score": 0.8172903289237422
+    }
+  }
 }

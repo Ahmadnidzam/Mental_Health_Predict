@@ -267,9 +267,12 @@
     <div id="panel-csv" style="display:none;">
 
         <div class="alert alert-info mb-4">
-            <strong>Format CSV:</strong> File harus memiliki header kolom yang sesuai.
-            <a href="#" id="downloadTemplate" class="alert-link">Download template CSV</a> sebagai panduan.
-            <div style="font-size:12px; margin-top:4px; color:var(--primary-deep);">
+            <strong>Format CSV:</strong> Sistem menerima dua format secara otomatis:
+            <ul class="mb-1 mt-1 ps-3" style="font-size:13px;">
+                <li><strong>Dengan header</strong> — baris pertama berisi nama kolom (urutan bebas, kolom ekstra seperti <code>mental_health_risk</code> di-ignore).</li>
+                <li><strong>Tanpa header</strong> — langsung data mulai baris 1, urutan kolom harus sesuai <a href="#" id="downloadTemplate" class="alert-link">template</a>.</li>
+            </ul>
+            <div style="font-size:12px; color:var(--primary-deep);">
                 Nilai biner (0/1): panic_attack_history, family_history_mental_illness, previous_mental_health_diagnosis, therapy_history, substance_use
             </div>
         </div>
@@ -540,12 +543,18 @@ document.getElementById('csvForm').addEventListener('submit', async function(e) 
     section.scrollIntoView({behavior:'smooth', block:'start'});
 
     const fd = new FormData();
-    fd.append('_token', document.querySelector('meta[name="csrf-token"]').content);
     fd.append('model', model);
     fd.append('csv', selectedFile);
 
     try {
-        const res  = await fetch('{{ route("predict.csv") }}', {method:'POST', body:fd});
+        const res  = await fetch('{{ route("predict.csv") }}', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            },
+            body: fd,
+        });
         const json = await res.json();
         spin.style.display = 'none';
 

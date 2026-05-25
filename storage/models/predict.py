@@ -3,23 +3,16 @@
 Dipanggil oleh Laravel via Symfony/Process:
     python storage/models/predict.py '<JSON-input>'
 
-Input JSON wajib menyertakan field 'model' yang menentukan model yang dipakai:
-    {
-        "model": "svm",   // satu dari: knn | knn_hpo | svm | svm_hpo | dt | dt_hpo
-        "age": 25,
-        "gender": "Male",
-        "education_level": "Bachelor",
+Mode single (input manual):
+    { "model": "svm", "age": 25, "gender": "Male", ... }
+    Output: { "status": "success", "prediction": 1, "confidence": 0.82, "label": "Sedang", "model": "svm" }
+
+Mode batch (upload CSV — semua baris sekaligus):
+    { "model": "svm", "rows": [ {"age":25,...}, {"age":30,...}, ... ] }
+    Output: { "status": "success", "model": "svm", "results": [
+        { "index": 0, "prediction": 1, "confidence": 0.82, "label": "Sedang" },
         ...
-    }
-
-Encoding sesuai notebooks/fix_(2).ipynb (31 fitur):
-    - education_level  : ordinal  (High School=0, Bachelor=1, Master=2, PhD=3)
-    - gender           : OHE binary (Female, Male, Other)
-    - marital_status   : OHE binary (Divorced, Married, Single)
-    - employment_status: OHE binary (Employed, Self-Employed, Student, Unemployed)
-
-Output JSON:
-    { "status": "success", "prediction": 1, "confidence": 0.82, "label": "Sedang", "model": "svm" }
+    ]}
 """
 from __future__ import annotations
 
@@ -126,12 +119,41 @@ def _preprocess(payload: dict) -> np.ndarray:
     return np.array([vector], dtype=float)
 
 
+def _predict_rows(rows: list[dict], model, scaler) -> list[dict]:
+    """Proses banyak baris sekaligus — model & scaler hanya di-load sekali."""
+    if not rows:
+        return []
+
+    # Bangun matrix (N x 31)
+    X_raw = np.vstack([_preprocess(r) for r in rows])
+    X_scaled = scaler.transform(X_raw)
+
+    predictions = model.predict(X_scaled)
+    probas      = model.predict_proba(X_scaled)
+
+    results = []
+    for i, (pred, proba) in enumerate(zip(predictions, probas)):
+        results.append({
+            "index":      i,
+            "prediction": int(pred),
+            "confidence": round(float(np.max(proba)), 4),
+            "label":      RISK_LABELS.get(int(pred), "Unknown"),
+        })
+    return results
+
+
 def main() -> None:
     try:
-        if len(sys.argv) < 2:
-            raise ValueError("Tidak ada input JSON. Usage: python predict.py '<json>'")
+        # --stdin  → baca JSON dari stdin (dipakai Laravel via proc_open tempfile)
+        # '<json>' → baca JSON dari argv[1] (backward-compat / manual test)
+        if len(sys.argv) >= 2 and sys.argv[1] == "--stdin":
+            raw = sys.stdin.read()
+        elif len(sys.argv) >= 2:
+            raw = sys.argv[1]
+        else:
+            raise ValueError("Usage: python predict.py --stdin  OR  python predict.py '<json>'")
 
-        payload = json.loads(sys.argv[1])
+        payload = json.loads(raw)
 
         model_key = str(payload.get("model", "svm")).lower().strip()
         if model_key not in MODEL_FILES:
@@ -140,33 +162,38 @@ def main() -> None:
                 f"Pilihan valid: {list(MODEL_FILES.keys())}"
             )
 
-        pkl_file = MODEL_FILES[model_key]
-        scaler   = _load("scaler.pkl")
-        model    = _load(pkl_file)
+        scaler = _load("scaler.pkl")
+        model  = _load(MODEL_FILES[model_key])
 
+        # ---- Mode batch ----
+        if "rows" in payload:
+            rows    = payload["rows"]
+            results = _predict_rows(rows, model, scaler)
+            print(json.dumps({"status": "success", "model": model_key, "results": results}))
+            return
+
+        # ---- Mode single ----
         X_raw    = _preprocess(payload)
         X_scaled = scaler.transform(X_raw)
 
-        prediction  = int(model.predict(X_scaled)[0])
-        proba       = model.predict_proba(X_scaled)[0]
-        confidence  = float(np.max(proba))
+        prediction = int(model.predict(X_scaled)[0])
+        proba      = model.predict_proba(X_scaled)[0]
+        confidence = float(np.max(proba))
 
-        output = {
+        print(json.dumps({
             "status":     "success",
             "model":      model_key,
             "prediction": prediction,
             "confidence": round(confidence, 4),
             "label":      RISK_LABELS.get(prediction, "Unknown"),
-        }
-        print(json.dumps(output))
+        }))
 
     except Exception as exc:
-        err = {
+        print(json.dumps({
             "status":  "error",
             "message": str(exc),
             "trace":   traceback.format_exc(),
-        }
-        print(json.dumps(err))
+        }))
         sys.exit(1)
 
 

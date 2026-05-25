@@ -7,7 +7,6 @@ use App\Models\Prediction;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
-use Symfony\Component\Process\Process;
 
 class RetrainModelsJob implements ShouldQueue
 {
@@ -69,21 +68,31 @@ class RetrainModelsJob implements ShouldQueue
         fclose($handle);
         Log::info("[RetrainModels] user_contributions.csv ditulis: {$totalRows} baris.");
 
-        // --- (b) Jalankan train_models.py ---
+        // --- (b) Jalankan train_models.py via proc_open (null env = OS-level inherit) ---
         $python = env('PYTHON_PATH', 'python');
         $script = storage_path('models/train_models.py');
 
-        $env = $this->buildWindowsEnv();
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
 
-        $process = new Process([$python, $script], null, $env);
-        $process->setTimeout(590);
-        $process->run();
+        $proc = proc_open([$python, $script], $descriptors, $pipes, null, null);
 
-        $stdout   = trim($process->getOutput());
-        $stderr   = trim($process->getErrorOutput());
-        $exitCode = $process->getExitCode();
+        if (! is_resource($proc)) {
+            Log::error('[RetrainModels] Gagal membuka Python process.');
+            return;
+        }
 
-        if (! $process->isSuccessful()) {
+        fclose($pipes[0]);
+        $stdout   = trim(stream_get_contents($pipes[1]));
+        $stderr   = trim(stream_get_contents($pipes[2]));
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($proc);
+
+        if ($exitCode !== 0) {
             Log::error('[RetrainModels] train_models.py gagal.', [
                 'exit_code' => $exitCode,
                 'stderr'    => $stderr,
@@ -127,32 +136,4 @@ class RetrainModelsJob implements ShouldQueue
         Log::info("[RetrainModels] Selesai dalam {$elapsed}s. Total data user: {$totalRows} baris. Retrain ke-{$retrainCount}.");
     }
 
-    private function buildWindowsEnv(): ?array
-    {
-        if (PHP_OS_FAMILY !== 'Windows') {
-            return null;
-        }
-
-        $systemRoot  = getenv('SystemRoot') ?: 'C:\\Windows';
-        $sys32       = $systemRoot . '\\System32';
-        $extraPath   = $sys32 . ';' . $systemRoot . ';' . $sys32 . '\\Wbem;' . $sys32 . '\\WindowsPowerShell\\v1.0';
-        $currentPath = getenv('PATH') ?: '';
-
-        return [
-            'PATH'         => $extraPath . ';' . $currentPath,
-            'SystemRoot'   => $systemRoot,
-            'SYSTEMROOT'   => $systemRoot,
-            'WINDIR'       => $systemRoot,
-            'SYSTEMDRIVE'  => getenv('SYSTEMDRIVE')  ?: 'C:',
-            'TEMP'         => getenv('TEMP')         ?: $systemRoot . '\\Temp',
-            'TMP'          => getenv('TMP')          ?: $systemRoot . '\\Temp',
-            'USERPROFILE'  => getenv('USERPROFILE')  ?: '',
-            'LOCALAPPDATA' => getenv('LOCALAPPDATA') ?: '',
-            'APPDATA'      => getenv('APPDATA')      ?: '',
-            'COMPUTERNAME' => getenv('COMPUTERNAME') ?: '',
-            'COMSPEC'      => getenv('COMSPEC')      ?: $sys32 . '\\cmd.exe',
-            'PATHEXT'      => getenv('PATHEXT')      ?: '.COM;.EXE;.BAT;.CMD',
-            'NUMBER_OF_PROCESSORS' => getenv('NUMBER_OF_PROCESSORS') ?: '4',
-        ];
-    }
 }

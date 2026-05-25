@@ -69,16 +69,17 @@
         <div class="row g-4 mb-5">
             @php
                 $stats = [
-                    ['bi-database',        number_format($datasetSize ?? 25000), 'Total Records',       $retrainCount > 0 ? 'Termasuk ' . number_format($userRows) . ' data user' : 'Dataset awal'],
-                    ['bi-list-columns',    '24',                                  'Fitur Input',         'Demografi, gaya hidup, psikologis, medis'],
-                    ['bi-bullseye',        '1',                                   'Target Label',        '3 kelas: Rendah / Sedang / Tinggi'],
-                    ['bi-clock-history',   number_format($totalPredictions ?? 0), 'Prediksi Tersimpan',  'Dari seluruh pengguna sistem'],
+                    ['bi-database',        number_format($datasetSize ?? 25000), 'Total Records',       $retrainCount > 0 ? 'Termasuk ' . number_format($userRows) . ' data user' : 'Dataset awal',        'var(--primary)'],
+                    ['bi-list-columns',    '24',                                  'Fitur Input',         'Demografi, gaya hidup, psikologis, medis',                                                         'var(--primary)'],
+                    ['bi-bullseye',        '1',                                   'Target Label',        '3 kelas: Rendah / Sedang / Tinggi',                                                                'var(--primary)'],
+                    ['bi-clock-history',   number_format($totalPredictions ?? 0), 'Prediksi Tersimpan',  'Dari seluruh pengguna sistem',                                                                     'var(--primary)'],
+                    ['bi-arrow-repeat',    number_format($userRows ?? 0),          'Data Diretrain',      $retrainCount > 0 ? 'Retrain ke-' . $retrainCount . ' · ' . number_format($datasetSize ?? 25000) . ' baris total' : 'Belum ada retrain', $retrainCount > 0 ? 'var(--success)' : 'var(--slate)'],
                 ];
             @endphp
-            @foreach ($stats as [$icon, $val, $label, $sub])
-            <div class="col-6 col-lg-3">
-                <div style="background:var(--canvas); border:1px solid var(--hairline-soft); border-radius:var(--r-xl); padding:24px 20px; text-align:center;">
-                    <i class="bi {{ $icon }}" style="font-size:28px; color:var(--primary); display:block; margin-bottom:12px;"></i>
+            @foreach ($stats as [$icon, $val, $label, $sub, $color])
+            <div class="col-6 col-lg">
+                <div style="background:var(--canvas); border:1px solid var(--hairline-soft); border-radius:var(--r-xl); padding:24px 20px; text-align:center; height:100%;">
+                    <i class="bi {{ $icon }}" style="font-size:28px; color:{{ $color }}; display:block; margin-bottom:12px;"></i>
                     <div style="font-size:28px; font-weight:700; color:var(--ink-deep); line-height:1;">{{ $val }}</div>
                     <div style="font-size:13px; font-weight:700; color:var(--charcoal); margin-top:6px;">{{ $label }}</div>
                     <div style="font-size:11px; color:var(--slate); margin-top:3px;">{{ $sub }}</div>
@@ -87,17 +88,6 @@
             @endforeach
         </div>
 
-        @if ($retrainCount > 0 && $lastRetrain)
-        <div style="background:var(--primary-soft); border:1px solid var(--primary); border-radius:var(--r-xl); padding:14px 20px; margin-bottom:40px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-            <i class="bi bi-arrow-repeat" style="font-size:18px; color:var(--primary);"></i>
-            <span style="font-size:14px; color:var(--ink-deep);">
-                Model dilatih ulang <strong>{{ $retrainCount }}×</strong> —
-                terakhir pada <strong>{{ \Carbon\Carbon::parse($lastRetrain)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB</strong>
-                dengan <strong>{{ number_format($datasetSize) }}</strong> baris data
-                ({{ number_format($userRows) }} dari pengguna).
-            </span>
-        </div>
-        @endif
 
         <div class="row g-5 align-items-start">
 

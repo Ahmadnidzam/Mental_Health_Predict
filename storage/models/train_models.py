@@ -129,24 +129,24 @@ def main() -> None:
         ]
         missing_cols = [c for c in required_raw_cols if c not in df_user.columns]
         if missing_cols:
-            print(f"      ⚠️  SKIP user_contributions.csv — kolom tidak lengkap: {missing_cols}")
+            print(f"      [SKIP] user_contributions.csv — kolom tidak lengkap: {missing_cols}")
         else:
             # Drop baris dengan target null atau nilai tidak valid (0/1/2)
             before_drop = len(df_user)
             df_user = df_user[df_user[TARGET_COL].isin([0, 1, 2])].reset_index(drop=True)
             dropped = before_drop - len(df_user)
             if dropped:
-                print(f"      ⚠️  {dropped} baris dibuang (target tidak valid)")
+                print(f"      [WARN] {dropped} baris dibuang (target tidak valid)")
 
             # Drop duplikat
             before_dedup = len(df_user)
             df_user = df_user.drop_duplicates().reset_index(drop=True)
             deduped = before_dedup - len(df_user)
             if deduped:
-                print(f"      ⚠️  {deduped} baris duplikat dibuang")
+                print(f"      [WARN] {deduped} baris duplikat dibuang")
 
             user_rows_added = len(df_user)
-            print(f"      ✅ {user_rows_added} baris valid akan digabung")
+            print(f"      [OK] {user_rows_added} baris valid akan digabung")
             df = pd.concat([df, df_user], ignore_index=True)
             print(f"      Shape setelah merge    : {df.shape}")
     else:
