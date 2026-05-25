@@ -3,43 +3,87 @@
 Dipanggil oleh Laravel via Symfony/Process:
     python storage/models/predict.py '<JSON-input>'
 
-Input  : JSON object berisi 24 fitur input.
-Output : JSON object berisi prediksi & confidence dari KNN, SVM, DT
-         + final prediction (majority voting).
+Input JSON wajib menyertakan field 'model' yang menentukan model yang dipakai:
+    {
+        "model": "svm",   // satu dari: knn | knn_hpo | svm | svm_hpo | dt | dt_hpo
+        "age": 25,
+        "gender": "Male",
+        "education_level": "Bachelor",
+        ...
+    }
+
+Encoding sesuai notebooks/fix_(2).ipynb (31 fitur):
+    - education_level  : ordinal  (High School=0, Bachelor=1, Master=2, PhD=3)
+    - gender           : OHE binary (Female, Male, Other)
+    - marital_status   : OHE binary (Divorced, Married, Single)
+    - employment_status: OHE binary (Employed, Self-Employed, Student, Unemployed)
+
+Output JSON:
+    { "status": "success", "prediction": 1, "confidence": 0.82, "label": "Sedang", "model": "svm" }
 """
 from __future__ import annotations
 
 import json
+import pickle
 import sys
 import traceback
-from collections import Counter
 from pathlib import Path
-
-import pickle
 
 import numpy as np
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
-CATEGORICAL_COLS = ["gender", "marital_status", "education_level", "employment_status"]
+EDUCATION_MAP = {"High School": 0, "Bachelor": 1, "Master": 2, "PhD": 3}
+
+GENDER_CLASSES     = ["Female", "Male", "Other"]
+MARITAL_CLASSES    = ["Divorced", "Married", "Single"]
+EMPLOYMENT_CLASSES = ["Employed", "Self-Employed", "Student", "Unemployed"]
+
+FEATURE_COLUMNS = [
+    "age", "education_level", "sleep_hours", "physical_activity_hours_per_week",
+    "screen_time_hours_per_day", "social_support_score", "work_stress_level",
+    "academic_pressure_level", "job_satisfaction_score", "financial_stress_level",
+    "working_hours_per_week", "anxiety_score", "depression_score", "stress_level",
+    "mood_swings_frequency", "concentration_difficulty_level", "panic_attack_history",
+    "family_history_mental_illness", "previous_mental_health_diagnosis",
+    "therapy_history", "substance_use",
+    "gender_Female", "gender_Male", "gender_Other",
+    "marital_status_Divorced", "marital_status_Married", "marital_status_Single",
+    "employment_status_Employed", "employment_status_Self-Employed",
+    "employment_status_Student", "employment_status_Unemployed",
+]
+
+NUMERIC_FIELDS = [
+    "age", "sleep_hours", "physical_activity_hours_per_week",
+    "screen_time_hours_per_day", "social_support_score", "work_stress_level",
+    "academic_pressure_level", "job_satisfaction_score", "financial_stress_level",
+    "working_hours_per_week", "anxiety_score", "depression_score", "stress_level",
+    "mood_swings_frequency", "concentration_difficulty_level", "panic_attack_history",
+    "family_history_mental_illness", "previous_mental_health_diagnosis",
+    "therapy_history", "substance_use",
+]
+
+MODEL_FILES = {
+    "knn":     "knn_model.pkl",
+    "knn_hpo": "knn_hpo_model.pkl",
+    "svm":     "svm_model.pkl",
+    "svm_hpo": "svm_hpo_model.pkl",
+    "dt":      "dt_model.pkl",
+    "dt_hpo":  "dt_hpo_model.pkl",
+}
+
+RISK_LABELS = {0: "Rendah", 1: "Sedang", 2: "Tinggi"}
 
 
-def _load(filename):
-    with open(SCRIPT_DIR / filename, "rb") as fh:
+def _load(filename: str):
+    path = SCRIPT_DIR / filename
+    if not path.exists():
+        raise FileNotFoundError(f"File model tidak ditemukan: {path}")
+    with open(path, "rb") as fh:
         return pickle.load(fh)
 
 
-def _load_artifacts():
-    knn = _load("knn_model.pkl")
-    svm = _load("svm_model.pkl")
-    dt = _load("dt_model.pkl")
-    scaler = _load("scaler.pkl")
-    encoders = _load("encoders.pkl")
-    feature_names = _load("feature_names.pkl")
-    return knn, svm, dt, scaler, encoders, feature_names
-
-
-def _coerce(value, default=0.0):
+def _coerce(value, default: float = 0.0) -> float:
     if value is None or value == "":
         return default
     try:
@@ -48,38 +92,38 @@ def _coerce(value, default=0.0):
         return default
 
 
-def _preprocess(payload, encoders, feature_names, scaler):
-    row = []
-    for col in feature_names:
-        raw = payload.get(col, None)
-        if col in CATEGORICAL_COLS:
-            le = encoders[col]
-            classes = list(le.classes_)
-            value = str(raw) if raw is not None else classes[0]
-            if value not in classes:
-                # Fallback: pakai class pertama agar tidak error
-                value = classes[0]
-            row.append(int(le.transform([value])[0]))
-        else:
-            row.append(_coerce(raw, 0.0))
-    arr = np.asarray([row], dtype=float)
-    return scaler.transform(arr)
+def _preprocess(payload: dict) -> np.ndarray:
+    """
+    Membangun vektor 31-fitur dari payload mentah sesuai encoding notebook.
+    """
+    row: dict[str, float] = {}
 
+    # Fitur numerik langsung (termasuk binary 0/1)
+    for col in NUMERIC_FIELDS:
+        row[col] = _coerce(payload.get(col))
 
-def _majority_vote(preds, confidences):
-    counts = Counter(preds)
-    top_count = max(counts.values())
-    candidates = [p for p, c in counts.items() if c == top_count]
-    if len(candidates) == 1:
-        return candidates[0]
-    # Tiebreak: ambil prediksi dengan confidence tertinggi di antara kandidat
-    best_pred = candidates[0]
-    best_conf = -1.0
-    for pred, conf in zip(preds, confidences):
-        if pred in candidates and conf > best_conf:
-            best_conf = conf
-            best_pred = pred
-    return best_pred
+    # Ordinal encoding untuk education_level
+    edu_raw = str(payload.get("education_level", "High School"))
+    row["education_level"] = float(EDUCATION_MAP.get(edu_raw, 0))
+
+    # OHE gender
+    gender_raw = str(payload.get("gender", ""))
+    for cls in GENDER_CLASSES:
+        row[f"gender_{cls}"] = 1.0 if gender_raw == cls else 0.0
+
+    # OHE marital_status
+    marital_raw = str(payload.get("marital_status", ""))
+    for cls in MARITAL_CLASSES:
+        row[f"marital_status_{cls}"] = 1.0 if marital_raw == cls else 0.0
+
+    # OHE employment_status
+    emp_raw = str(payload.get("employment_status", ""))
+    for cls in EMPLOYMENT_CLASSES:
+        row[f"employment_status_{cls}"] = 1.0 if emp_raw == cls else 0.0
+
+    # Susun vektor sesuai urutan FEATURE_COLUMNS
+    vector = [row[col] for col in FEATURE_COLUMNS]
+    return np.array([vector], dtype=float)
 
 
 def main() -> None:
@@ -89,46 +133,38 @@ def main() -> None:
 
         payload = json.loads(sys.argv[1])
 
-        knn, svm, dt, scaler, encoders, feature_names = _load_artifacts()
-        X = _preprocess(payload, encoders, feature_names, scaler)
+        model_key = str(payload.get("model", "svm")).lower().strip()
+        if model_key not in MODEL_FILES:
+            raise ValueError(
+                f"Model '{model_key}' tidak dikenal. "
+                f"Pilihan valid: {list(MODEL_FILES.keys())}"
+            )
 
-        knn_pred = int(knn.predict(X)[0])
-        svm_pred = int(svm.predict(X)[0])
-        dt_pred = int(dt.predict(X)[0])
+        pkl_file = MODEL_FILES[model_key]
+        scaler   = _load("scaler.pkl")
+        model    = _load(pkl_file)
 
-        knn_conf = float(np.max(knn.predict_proba(X)[0]))
-        svm_conf = float(np.max(svm.predict_proba(X)[0]))
-        dt_conf = float(np.max(dt.predict_proba(X)[0]))
+        X_raw    = _preprocess(payload)
+        X_scaled = scaler.transform(X_raw)
 
-        final_pred = _majority_vote(
-            [knn_pred, svm_pred, dt_pred],
-            [knn_conf, svm_conf, dt_conf],
-        )
-
-        labels = {0: "Rendah", 1: "Sedang", 2: "Tinggi"}
+        prediction  = int(model.predict(X_scaled)[0])
+        proba       = model.predict_proba(X_scaled)[0]
+        confidence  = float(np.max(proba))
 
         output = {
-            "status": "success",
-            "knn": knn_pred,
-            "svm": svm_pred,
-            "dt": dt_pred,
-            "knn_confidence": round(knn_conf, 4),
-            "svm_confidence": round(svm_conf, 4),
-            "dt_confidence": round(dt_conf, 4),
-            "final": int(final_pred),
-            "labels": {
-                "knn": labels.get(knn_pred, "Unknown"),
-                "svm": labels.get(svm_pred, "Unknown"),
-                "dt": labels.get(dt_pred, "Unknown"),
-                "final": labels.get(int(final_pred), "Unknown"),
-            },
+            "status":     "success",
+            "model":      model_key,
+            "prediction": prediction,
+            "confidence": round(confidence, 4),
+            "label":      RISK_LABELS.get(prediction, "Unknown"),
         }
         print(json.dumps(output))
-    except Exception as exc:  # noqa: BLE001
+
+    except Exception as exc:
         err = {
-            "status": "error",
+            "status":  "error",
             "message": str(exc),
-            "trace": traceback.format_exc(),
+            "trace":   traceback.format_exc(),
         }
         print(json.dumps(err))
         sys.exit(1)

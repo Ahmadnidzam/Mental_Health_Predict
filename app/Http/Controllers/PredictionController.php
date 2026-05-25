@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\RetrainModelsJob;
 use App\Models\Prediction;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -11,9 +12,6 @@ use Symfony\Component\Process\Process;
 
 class PredictionController extends Controller
 {
-    /**
-     * Daftar fitur yang akan dikirim ke Python script.
-     */
     private const FEATURE_FIELDS = [
         'age', 'gender', 'marital_status', 'education_level', 'employment_status',
         'sleep_hours', 'physical_activity_hours_per_week', 'screen_time_hours_per_day',
@@ -25,21 +23,19 @@ class PredictionController extends Controller
         'therapy_history', 'substance_use',
     ];
 
-    /**
-     * Tampilkan form prediksi.
-     */
+    private const AVAILABLE_MODELS = ['svm', 'svm_hpo'];
+
+    private const ALL_MODELS = ['knn', 'knn_hpo', 'svm', 'svm_hpo', 'dt', 'dt_hpo'];
+
     public function showForm()
     {
         return view('predict');
     }
 
-    /**
-     * Proses form prediksi: panggil Python predict.py, simpan ke DB,
-     * lalu kembalikan response JSON (untuk AJAX) atau redirect (non-AJAX).
-     */
     public function predict(Request $request)
     {
         $rules = [
+            'model'                            => 'required|string|in:' . implode(',', self::ALL_MODELS),
             'age'                              => 'required|numeric|min:1|max:120',
             'gender'                           => 'required|string|in:Male,Female,Other',
             'marital_status'                   => 'required|string|in:Single,Married,Divorced',
@@ -68,74 +64,173 @@ class PredictionController extends Controller
 
         $validated = $request->validate($rules);
 
-        // Hanya ambil 24 fitur (buang token CSRF dll.)
-        $features = collect($validated)
-            ->only(self::FEATURE_FIELDS)
-            ->toArray();
+        $selectedModel = $validated['model'];
+        $features = collect($validated)->only(self::FEATURE_FIELDS)->toArray();
 
-        $output = $this->callPythonPredict($features);
+        $payload = array_merge(['model' => $selectedModel], $features);
+        $output  = $this->callPythonPredict($payload);
 
         if (! is_array($output) || ($output['status'] ?? null) !== 'success') {
             $message = $output['message'] ?? 'Gagal menjalankan prediksi (Python script error).';
-            Log::error('predict.py failed', ['payload' => $features, 'output' => $output]);
+            Log::error('predict.py failed', ['payload' => $payload, 'output' => $output]);
 
             if ($request->wantsJson()) {
-                return response()->json([
-                    'status'  => 'error',
-                    'message' => $message,
-                ], 500);
+                return response()->json(['status' => 'error', 'message' => $message], 500);
             }
 
             return back()->withInput()->with('error', $message);
         }
 
         $prediction = Prediction::create([
+            'user_id'          => auth()->id(),
+            'selected_model'   => $output['model'],
             'input_features'   => $features,
-            'knn_prediction'   => $output['knn'],
-            'svm_prediction'   => $output['svm'],
-            'dt_prediction'    => $output['dt'],
-            'knn_confidence'   => $output['knn_confidence'],
-            'svm_confidence'   => $output['svm_confidence'],
-            'dt_confidence'    => $output['dt_confidence'],
-            'final_prediction' => $output['final'],
+            'final_prediction' => $output['prediction'],
+            'confidence'       => $output['confidence'],
         ]);
+
+        $this->maybeDispatchRetrain();
 
         if ($request->wantsJson()) {
             return response()->json([
                 'status'     => 'success',
-                'prediction' => $prediction,
-                'labels'     => $output['labels'] ?? null,
+                'prediction' => [
+                    'id'             => $prediction->id,
+                    'selected_model' => $prediction->selected_model,
+                    'model_label'    => $prediction->model_label,
+                    'final_prediction' => $prediction->final_prediction,
+                    'confidence'     => $prediction->confidence,
+                    'label'          => $prediction->final_label,
+                ],
             ]);
         }
 
-        return redirect()
-            ->route('history')
-            ->with('success', 'Prediksi berhasil disimpan.');
+        return redirect()->route('history')->with('success', 'Prediksi berhasil disimpan.');
     }
 
-    /**
-     * Detail satu prediksi (untuk JSON / modal di halaman history).
-     */
-    public function show(Prediction $prediction): JsonResponse
+    public function predictCsv(Request $request): JsonResponse
     {
+        $request->validate([
+            'model' => 'required|string|in:' . implode(',', self::ALL_MODELS),
+            'csv'   => 'required|file|mimes:csv,txt|max:2048',
+        ]);
+
+        $selectedModel = $request->input('model');
+        $path = $request->file('csv')->getRealPath();
+        $handle = fopen($path, 'r');
+
+        if ($handle === false) {
+            return response()->json(['status' => 'error', 'message' => 'Gagal membaca file CSV.'], 422);
+        }
+
+        $header = fgetcsv($handle);
+        if ($header === false) {
+            fclose($handle);
+            return response()->json(['status' => 'error', 'message' => 'File CSV kosong.'], 422);
+        }
+
+        $header = array_map('trim', $header);
+        $missingCols = array_diff(self::FEATURE_FIELDS, $header);
+        if (!empty($missingCols)) {
+            fclose($handle);
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Kolom tidak lengkap: ' . implode(', ', $missingCols),
+            ], 422);
+        }
+
+        $results     = [];
+        $rowNum      = 1;
+        $countBefore = Prediction::count();
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $rowNum++;
+            if (count($row) !== count($header)) continue;
+
+            $data = array_combine($header, $row);
+            $features = [];
+            foreach (self::FEATURE_FIELDS as $field) {
+                $features[$field] = trim($data[$field] ?? '');
+            }
+
+            $payload = array_merge(['model' => $selectedModel], $features);
+            $output  = $this->callPythonPredict($payload);
+
+            if (!is_array($output) || ($output['status'] ?? null) !== 'success') {
+                $results[] = [
+                    'row'    => $rowNum,
+                    'status' => 'error',
+                    'message' => $output['message'] ?? 'Gagal prediksi',
+                    'input'  => $features,
+                ];
+                continue;
+            }
+
+            $prediction = Prediction::create([
+                'user_id'          => auth()->id(),
+                'selected_model'   => $output['model'],
+                'input_features'   => $features,
+                'final_prediction' => $output['prediction'],
+                'confidence'       => $output['confidence'],
+            ]);
+
+            $results[] = [
+                'row'              => $rowNum,
+                'status'           => 'success',
+                'id'               => $prediction->id,
+                'final_prediction' => $prediction->final_prediction,
+                'label'            => $prediction->final_label,
+                'confidence'       => $prediction->confidence,
+                'input'            => $features,
+            ];
+        }
+
+        fclose($handle);
+
+        $this->maybeDispatchRetrain($countBefore ?? 0);
+
         return response()->json([
-            'id'             => $prediction->id,
-            'created_at'     => $prediction->created_at->format('d/m/Y H:i'),
-            'input_features' => $prediction->input_features,
-            'knn'            => ['pred' => $prediction->knn_prediction, 'conf' => $prediction->knn_confidence, 'label' => $prediction->knn_label],
-            'svm'            => ['pred' => $prediction->svm_prediction, 'conf' => $prediction->svm_confidence, 'label' => $prediction->svm_label],
-            'dt'             => ['pred' => $prediction->dt_prediction, 'conf' => $prediction->dt_confidence, 'label' => $prediction->dt_label],
-            'final'          => ['pred' => $prediction->final_prediction, 'label' => $prediction->final_label],
+            'status'  => 'success',
+            'model'   => $selectedModel,
+            'total'   => count($results),
+            'results' => $results,
         ]);
     }
 
-    /**
-     * Panggil Python predict.py via Symfony Process.
-     *
-     * @param  array<string, mixed>  $features
-     * @return array<string, mixed>|null
-     */
-    private function callPythonPredict(array $features): ?array
+    public function show(Prediction $prediction): JsonResponse
+    {
+        if ($prediction->user_id !== auth()->id()) {
+            abort(403);
+        }
+
+        return response()->json([
+            'id'             => $prediction->id,
+            'created_at'     => $prediction->created_at->format('d/m/Y H:i'),
+            'selected_model' => $prediction->selected_model,
+            'model_label'    => $prediction->model_label,
+            'input_features' => $prediction->input_features,
+            'final_prediction' => $prediction->final_prediction,
+            'confidence'     => $prediction->confidence,
+            'label'          => $prediction->final_label,
+        ]);
+    }
+
+    private function maybeDispatchRetrain(int $countBefore = -1): void
+    {
+        $retainEvery = (int) env('RETRAIN_EVERY', 50);
+        $total       = Prediction::count();
+
+        $shouldRetrain = $countBefore < 0
+            ? ($total > 0 && $total % $retainEvery === 0)
+            : (floor($total / $retainEvery) > floor($countBefore / $retainEvery));
+
+        if ($shouldRetrain) {
+            RetrainModelsJob::dispatch();
+            Log::info("[Retrain] Job dispatched — total prediksi: {$total}");
+        }
+    }
+
+    private function callPythonPredict(array $payload): ?array
     {
         $python = env('PYTHON_PATH', 'python');
         $script = storage_path('models/predict.py');
@@ -144,12 +239,8 @@ class PredictionController extends Controller
             return ['status' => 'error', 'message' => "predict.py tidak ditemukan di {$script}"];
         }
 
-        $jsonArg = json_encode($features);
+        $jsonArg = json_encode($payload);
 
-        // Di Windows, env yang dibawa PHP (terutama dari XAMPP) sering
-        // tidak memuat C:\Windows\System32 di PATH. Akibatnya Python tidak
-        // bisa load DLL Winsock saat `import _overlapped` -> WinError 10106.
-        // Kita override env untuk menjamin PATH lengkap dan SystemRoot ter-set.
         $env = null;
         if (PHP_OS_FAMILY === 'Windows') {
             $systemRoot = getenv('SystemRoot') ?: 'C:\\Windows';
@@ -181,7 +272,6 @@ class PredictionController extends Controller
         $stdout = trim($process->getOutput());
         $stderr = trim($process->getErrorOutput());
 
-        // Hanya log detail call kalau APP_DEBUG=true.
         if (config('app.debug')) {
             Log::debug('[PREDICT] Python call', [
                 'python_path' => $python,
@@ -192,11 +282,8 @@ class PredictionController extends Controller
         }
 
         if (! $process->isSuccessful()) {
-            // Python mungkin meng-print JSON error walau exit-code != 0
             $decoded = json_decode($stdout, true);
-            if (is_array($decoded)) {
-                return $decoded;
-            }
+            if (is_array($decoded)) return $decoded;
             return [
                 'status'  => 'error',
                 'message' => $stderr !== '' ? $stderr : 'Process gagal (exit code ' . $process->getExitCode() . ').',
@@ -205,10 +292,7 @@ class PredictionController extends Controller
 
         $decoded = json_decode($stdout, true);
         if (! is_array($decoded)) {
-            return [
-                'status'  => 'error',
-                'message' => 'Output Python tidak valid JSON: ' . substr($stdout, 0, 200),
-            ];
+            return ['status' => 'error', 'message' => 'Output Python tidak valid JSON: ' . substr($stdout, 0, 200)];
         }
 
         return $decoded;

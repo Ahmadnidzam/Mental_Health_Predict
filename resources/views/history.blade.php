@@ -3,79 +3,100 @@
 @section('title', 'Riwayat Prediksi')
 
 @section('content')
-<div class="container-lg">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="mb-0"><i class="bi bi-clock-history"></i> Riwayat Prediksi</h2>
-        <a href="{{ route('predict.form') }}" class="btn btn-primary"><i class="bi bi-plus-circle"></i> Prediksi Baru</a>
-    </div>
+<div class="container-lg" style="padding-top:48px; padding-bottom:80px;">
 
-    <div class="card shadow-sm">
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th>#</th>
-                            <th>Tanggal</th>
-                            <th>Umur</th>
-                            <th>Gender</th>
-                            <th class="text-center">KNN</th>
-                            <th class="text-center">SVM</th>
-                            <th class="text-center">Decision Tree</th>
-                            <th class="text-center">Final</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @php
-                            $badge = function ($value) {
-                                $cls  = ['success', 'warning', 'danger'][$value] ?? 'secondary';
-                                $text = ['Rendah', 'Sedang', 'Tinggi'][$value] ?? '?';
-                                return "<span class='badge bg-{$cls}'>{$text}</span>";
-                            };
-                        @endphp
-
-                        @forelse ($predictions as $pred)
-                            <tr>
-                                <td>{{ $loop->iteration + ($predictions->currentPage() - 1) * $predictions->perPage() }}</td>
-                                <td>{{ $pred->created_at->format('d/m/Y H:i') }}</td>
-                                <td>{{ $pred->input_features['age'] ?? '-' }}</td>
-                                <td>{{ $pred->input_features['gender'] ?? '-' }}</td>
-                                <td class="text-center">{!! $badge($pred->knn_prediction) !!}</td>
-                                <td class="text-center">{!! $badge($pred->svm_prediction) !!}</td>
-                                <td class="text-center">{!! $badge($pred->dt_prediction) !!}</td>
-                                <td class="text-center"><strong>{!! $badge($pred->final_prediction) !!}</strong></td>
-                                <td>
-                                    <button type="button" class="btn btn-sm btn-outline-primary"
-                                            data-bs-toggle="modal" data-bs-target="#detailModal"
-                                            data-id="{{ $pred->id }}">
-                                        <i class="bi bi-eye"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="9" class="text-center text-muted py-5">Belum ada prediksi. <a href="{{ route('predict.form') }}">Buat prediksi pertama Anda &rarr;</a></td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-
-            @if ($predictions->hasPages())
-                <div class="mt-3">{{ $predictions->links() }}</div>
-            @endif
+    {{-- Header --}}
+    <div class="d-flex justify-content-between align-items-start mb-5 flex-wrap gap-3">
+        <div>
+            <p class="section-label mb-1">Dashboard</p>
+            <h1 style="font-size:32px; font-weight:500; color:var(--ink-deep); margin:0;">Riwayat Prediksi</h1>
         </div>
+        <a href="{{ route('predict.form') }}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-2"></i>Prediksi Baru
+        </a>
     </div>
+
+    {{-- Table --}}
+    <div class="table-container">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Tanggal</th>
+                    <th>Umur</th>
+                    <th>Gender</th>
+                    <th>Model</th>
+                    <th class="text-center">Hasil Risiko</th>
+                    <th class="text-center">Confidence</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @php
+                    $riskLabel = ['Rendah', 'Sedang', 'Tinggi'];
+                    $riskBg    = ['var(--success)', 'var(--warning)', 'var(--critical)'];
+                    $riskFg    = ['#fff', 'var(--ink-deep)', '#fff'];
+                @endphp
+
+                @forelse ($predictions as $pred)
+                    <tr>
+                        <td style="color:var(--slate); font-size:13px;">
+                            {{ $loop->iteration + ($predictions->currentPage()-1) * $predictions->perPage() }}
+                        </td>
+                        <td style="font-size:13px; color:var(--charcoal);">{{ $pred->created_at->format('d/m/Y H:i') }}</td>
+                        <td style="font-weight:500;">{{ $pred->input_features['age'] ?? '-' }}</td>
+                        <td style="color:var(--charcoal);">{{ $pred->input_features['gender'] ?? '-' }}</td>
+                        <td>
+                            <span style="font-size:12px; font-weight:700; color:var(--primary); background:var(--primary-soft); padding:4px 10px; border-radius:var(--r-full);">
+                                {{ $pred->model_label }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            @php $rv = $pred->final_prediction; @endphp
+                            <span style="padding:4px 12px; font-size:12px; font-weight:700; border-radius:var(--r-full); background:{{ $riskBg[$rv] ?? '#ccc' }}; color:{{ $riskFg[$rv] ?? '#000' }};">
+                                {{ $riskLabel[$rv] ?? '?' }}
+                            </span>
+                        </td>
+                        <td class="text-center" style="font-size:14px; font-weight:700; color:var(--ink-deep);">
+                            {{ $pred->confidence !== null ? number_format($pred->confidence*100,1).'%' : '—' }}
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-ghost btn-sm"
+                                    data-bs-toggle="modal" data-bs-target="#detailModal"
+                                    data-id="{{ $pred->id }}"
+                                    style="padding:6px 14px; font-size:13px;">
+                                <i class="bi bi-eye me-1"></i>Detail
+                            </button>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="8" style="text-align:center; padding:64px 0; color:var(--slate);">
+                            Belum ada prediksi.
+                            <a href="{{ route('predict.form') }}" style="color:var(--primary); font-weight:700;">Buat prediksi pertama Anda &rarr;</a>
+                        </td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    @if ($predictions->hasPages())
+        <div class="mt-4 d-flex justify-content-center">{{ $predictions->links() }}</div>
+    @endif
+
 </div>
 
+{{-- Detail Modal --}}
 <div class="modal fade" id="detailModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-clipboard-data"></i> Detail Prediksi</h5>
+                <h5 class="modal-title">Detail Prediksi</h5>
                 <button class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="detailContent">
-                <div class="text-center py-3"><div class="spinner-border text-primary"></div></div>
+                <div class="text-center py-4"><div class="spinner-border"></div></div>
             </div>
         </div>
     </div>
@@ -84,29 +105,51 @@
 
 @push('scripts')
 <script>
-const detailModal = document.getElementById('detailModal');
-detailModal && detailModal.addEventListener('show.bs.modal', async (event) => {
-    const id = event.relatedTarget?.getAttribute('data-id');
+const riskBg    = {0:'var(--success)', 1:'var(--warning)', 2:'var(--critical)'};
+const riskFg    = {0:'#fff', 1:'var(--ink-deep)', 2:'#fff'};
+const riskText  = {0:'Rendah', 1:'Sedang', 2:'Tinggi'};
+const modelLabels = {
+    'knn':'K-Nearest Neighbors','knn_hpo':'KNN + HPO',
+    'svm':'Support Vector Machine','svm_hpo':'SVM + HPO',
+    'dt':'Decision Tree','dt_hpo':'Decision Tree + HPO',
+};
+
+document.getElementById('detailModal')?.addEventListener('show.bs.modal', async (event) => {
+    const id   = event.relatedTarget?.getAttribute('data-id');
     const body = document.getElementById('detailContent');
-    body.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div></div>';
+    body.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div></div>';
+
     try {
-        const res = await fetch(`/predict/${id}`, { headers: {'Accept': 'application/json'} });
+        const res  = await fetch(`/predict/${id}`, {headers:{'Accept':'application/json'}});
         const data = await res.json();
-        const labels = {0:'Rendah', 1:'Sedang', 2:'Tinggi'};
-        const cls = {0:'success', 1:'warning', 2:'danger'};
-        const row = (k, v) => `<tr><td><small class="text-muted">${k}</small></td><td>${v}</td></tr>`;
-        const inputRows = Object.entries(data.input_features || {}).map(([k,v]) => row(k, v)).join('');
+
+        const rv     = data.final_prediction;
+        const bg     = riskBg[rv]   ?? '#ccc';
+        const fg     = riskFg[rv]   ?? '#000';
+        const label  = riskText[rv] ?? '?';
+        const mLabel = modelLabels[data.selected_model] ?? (data.selected_model ?? '—');
+        const conf   = data.confidence != null ? (data.confidence*100).toFixed(2)+'%' : '—';
+
+        const rows = Object.entries(data.input_features||{}).map(([k,v])=>`
+            <tr>
+                <td style="font-size:13px; color:var(--slate); width:55%;">${k}</td>
+                <td style="font-size:14px; font-weight:500; color:var(--ink-deep);">${v}</td>
+            </tr>
+        `).join('');
+
         body.innerHTML = `
-            <h6>Hasil Prediksi</h6>
-            <div class="row g-2 mb-3">
-                <div class="col-3"><div class="card text-center border-${cls[data.knn.pred]||'secondary'}"><div class="card-body py-2"><small>KNN</small><br><strong class="text-${cls[data.knn.pred]||'secondary'}">${labels[data.knn.pred]||'?'}</strong><br><small>${(data.knn.conf*100).toFixed(1)}%</small></div></div></div>
-                <div class="col-3"><div class="card text-center border-${cls[data.svm.pred]||'secondary'}"><div class="card-body py-2"><small>SVM</small><br><strong class="text-${cls[data.svm.pred]||'secondary'}">${labels[data.svm.pred]||'?'}</strong><br><small>${(data.svm.conf*100).toFixed(1)}%</small></div></div></div>
-                <div class="col-3"><div class="card text-center border-${cls[data.dt.pred]||'secondary'}"><div class="card-body py-2"><small>DT</small><br><strong class="text-${cls[data.dt.pred]||'secondary'}">${labels[data.dt.pred]||'?'}</strong><br><small>${(data.dt.conf*100).toFixed(1)}%</small></div></div></div>
-                <div class="col-3"><div class="card text-center bg-${cls[data.final.pred]||'secondary'} text-white"><div class="card-body py-2"><small>FINAL</small><br><strong>${labels[data.final.pred]||'?'}</strong></div></div></div>
+            <div style="background:var(--surface-soft); border-radius:var(--r-xl); padding:20px 24px; margin-bottom:20px;">
+                <p style="font-size:12px; color:var(--slate); margin-bottom:6px;">Model: <strong style="color:var(--ink-deep);">${mLabel}</strong></p>
+                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                    <span style="padding:8px 20px; border-radius:var(--r-full); background:${bg}; color:${fg}; font-size:16px; font-weight:700;">${label}</span>
+                    <span style="font-size:14px; color:var(--charcoal);">Confidence: <strong style="color:var(--ink-deep);">${conf}</strong></span>
+                </div>
             </div>
-            <h6>Input Features</h6>
-            <table class="table table-sm"><tbody>${inputRows}</tbody></table>
-            <small class="text-muted">Diprediksi pada: ${data.created_at}</small>
+            <p style="font-size:13px; font-weight:700; color:var(--slate); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px;">Input Features</p>
+            <div style="border:1px solid var(--hairline-soft); border-radius:var(--r-xl); overflow:hidden;">
+                <table class="table table-sm mb-0"><tbody>${rows}</tbody></table>
+            </div>
+            <p style="font-size:12px; color:var(--steel); margin-top:12px;">Diprediksi pada: ${data.created_at}</p>
         `;
     } catch (e) {
         body.innerHTML = `<div class="alert alert-danger">Gagal memuat detail: ${e.message}</div>`;

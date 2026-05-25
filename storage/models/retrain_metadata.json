@@ -1,0 +1,8 @@
+{
+  "retrains_count": 0,
+  "last_retrain_timestamp": null,
+  "last_retrain_dataset_size": null,
+  "user_data_rows_used": 0,
+  "models_trained": [],
+  "training_metrics": {}
+}
