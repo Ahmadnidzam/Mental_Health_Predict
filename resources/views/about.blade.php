@@ -27,7 +27,7 @@
                         <div class="col-md-6">
                             <strong>Backend</strong>
                             <ul class="mb-0">
-                                <li>Laravel 11 (PHP)</li>
+                                <li>Laravel 12 (PHP)</li>
                                 <li>MySQL untuk penyimpanan data</li>
                                 <li>Eloquent ORM</li>
                             </ul>
@@ -36,8 +36,8 @@
                             <strong>Machine Learning</strong>
                             <ul class="mb-0">
                                 <li>Python 3 + scikit-learn</li>
-                                <li>KNN, SVM, Decision Tree</li>
-                                <li>StandardScaler & LabelEncoder</li>
+                                <li>KNN, KNN+HPO, SVM, SVM+HPO, Decision Tree, DT+HPO</li>
+                                <li>StandardScaler & encoding fitur</li>
                             </ul>
                         </div>
                         <div class="col-md-6">

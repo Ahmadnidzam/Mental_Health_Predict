@@ -34,8 +34,8 @@
         'knn_hpo' => ['label'=>'KNN + HPO',     'desc'=>'KNN + Hyperparameter Tuning', 'ready'=>true],
         'svm'     => ['label'=>'SVM',           'desc'=>'Support Vector Machine',      'ready'=>true],
         'svm_hpo' => ['label'=>'SVM + HPO',     'desc'=>'SVM + Hyperparameter Tuning', 'ready'=>true],
-        'dt'      => ['label'=>'Decision Tree', 'desc'=>'Pohon Keputusan',             'ready'=>false],
-        'dt_hpo'  => ['label'=>'DT + HPO',      'desc'=>'Decision Tree + HPO',         'ready'=>false],
+        'dt'      => ['label'=>'Decision Tree', 'desc'=>'Pohon Keputusan',             'ready'=>true],
+        'dt_hpo'  => ['label'=>'DT + HPO',      'desc'=>'Decision Tree + HPO',         'ready'=>true],
     ];
     $tips = [
         'age'                              => 'Usia Anda saat ini dalam satuan tahun (1–120).',

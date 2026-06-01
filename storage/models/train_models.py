@@ -241,27 +241,27 @@ def main() -> None:
     metrics["SVM+HPO"] = _eval("SVM+HPO", svm_hpo, X_test_s, y_test)
 
     # --- DT (non-HPO) ---
-    # print("\n  >> DT (non-HPO): default params")
-    # dt = DecisionTreeClassifier(random_state=MODEL_RANDOM_STATE)
-    # dt.fit(X_train_s, y_train)
-    # metrics["DT"] = _eval("DT", dt, X_test_s, y_test)
+    print("\n  >> DT (non-HPO): max_depth=10")
+    dt = DecisionTreeClassifier(random_state=MODEL_RANDOM_STATE, max_depth=10)
+    dt.fit(X_train_s, y_train)
+    metrics["DT"] = _eval("DT", dt, X_test_s, y_test)
 
-    # # --- DT + HPO ---
-    # print("\n  >> DT+HPO: GridSearchCV(criterion,max_depth,min_samples_split,min_samples_leaf, cv=5)")
-    # param_grid_dt = {
-    #     "criterion": ["gini", "entropy"],
-    #     "max_depth": [5, 10, 15, None],
-    #     "min_samples_split": [2, 5, 10],
-    #     "min_samples_leaf": [1, 2, 5],
-    # }
-    # grid_dt = GridSearchCV(
-    #     DecisionTreeClassifier(random_state=MODEL_RANDOM_STATE), param_grid_dt,
-    #     scoring="recall_macro", cv=5, refit=True, n_jobs=-1,
-    # )
-    # grid_dt.fit(X_train_s, y_train)
-    # dt_hpo = grid_dt.best_estimator_
-    # print(f"      Best params DT+HPO: {grid_dt.best_params_}")
-    # metrics["DT+HPO"] = _eval("DT+HPO", dt_hpo, X_test_s, y_test)
+    # --- DT + HPO ---
+    print("\n  >> DT+HPO: GridSearchCV(criterion,max_depth,min_samples_split,min_samples_leaf, cv=5)")
+    param_grid_dt = {
+        "criterion": ["gini", "entropy"],
+        "max_depth": [5, 10, 15, None],
+        "min_samples_split": [2, 5, 10],
+        "min_samples_leaf": [1, 2, 5],
+    }
+    grid_dt = GridSearchCV(
+        DecisionTreeClassifier(random_state=MODEL_RANDOM_STATE), param_grid_dt,
+        scoring="recall_macro", cv=5, refit=True, n_jobs=-1,
+    )
+    grid_dt.fit(X_train_s, y_train)
+    dt_hpo = grid_dt.best_estimator_
+    print(f"      Best params DT+HPO: {grid_dt.best_params_}")
+    metrics["DT+HPO"] = _eval("DT+HPO", dt_hpo, X_test_s, y_test)
 
     # ----- [7] Simpan artifacts -----
     print("\n[7/7] Menyimpan artifacts ke storage/models/")
@@ -269,8 +269,8 @@ def main() -> None:
     _save(knn_hpo,         "knn_hpo_model.pkl")
     _save(svm,             "svm_model.pkl")
     _save(svm_hpo,         "svm_hpo_model.pkl")
-    # _save(dt,              "dt_model.pkl")
-    # _save(dt_hpo,          "dt_hpo_model.pkl")
+    _save(dt,              "dt_model.pkl")
+    _save(dt_hpo,          "dt_hpo_model.pkl")
     _save(scaler,          "scaler.pkl")
     _save(FEATURE_COLUMNS, "feature_columns.pkl")
 

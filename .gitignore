@@ -27,6 +27,11 @@ Thumbs.db
 /storage/models/*.pkl
 /storage/models/train_results.json
 /storage/models/train_results.txt
+/storage/models/data/user_contributions.csv
+
+# Local/generated artifacts
+/tormonitor-after-login.png
+/.claude/
 
 # Python cache
 __pycache__/

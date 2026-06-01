@@ -2,7 +2,7 @@
 
 ## Gambaran Umum
 
-Aplikasi web prediksi risiko kesehatan mental berbasis **Laravel 11 + Python ML** dengan model SVM dan SVM+HPO. Selama sesi ini, fitur-fitur berikut dikembangkan dari nol hingga siap deploy.
+Aplikasi web prediksi risiko kesehatan mental berbasis **Laravel 12 + Python ML** dengan 6 pilihan model: KNN, KNN+HPO, SVM, SVM+HPO, Decision Tree, dan DT+HPO. Selama sesi ini, fitur-fitur berikut dikembangkan dari nol hingga siap deploy.
 
 ---
 
@@ -33,8 +33,8 @@ Aplikasi web prediksi risiko kesehatan mental berbasis **Laravel 11 + Python ML*
 - `resources/views/predict.blade.php`
 
 **Yang diimplementasikan:**
-- 6 pilihan model: KNN, KNN+HPO, SVM, SVM+HPO, Decision Tree, DT+HPO
-- Hanya SVM dan SVM+HPO yang aktif ("Siap"), sisanya tampil badge "Segera"
+- 6 pilihan model aktif di UI
+- `predict.py` memuat artifact sesuai pilihan user
 - Encoding sesuai notebook `fix_(2).ipynb`:
   - **Ordinal**: `education_level` (High School=0, Bachelor=1, Master=2, PhD=3)
   - **One-Hot**: `gender`, `marital_status`, `employment_status`
@@ -81,7 +81,7 @@ Aplikasi web prediksi risiko kesehatan mental berbasis **Laravel 11 + Python ML*
   3. Update tabel `model_metrics` dari `train_results.json`
   4. Tulis `retrain_metadata.json`
 - **Pseudo-labeling**: `final_prediction` digunakan sebagai ground truth label data baru
-- Hanya SVM dan SVM+HPO yang diretrain
+- Seluruh model yang didefinisikan di `train_models.py` ikut retrain
 
 ### Validasi data sebelum merge:
 - Cek kelengkapan 25 kolom wajib
@@ -146,7 +146,7 @@ PredictionController
                     ├── proc_open → train_models.py
                     │       ├── Load dataset asli (25.000 baris)
                     │       ├── Merge user_contributions.csv (validasi + dedup)
-                    │       ├── Train SVM & SVM+HPO
+                    │       ├── Train KNN, KNN+HPO, SVM, SVM+HPO, DT, DT+HPO
                     │       └── Simpan pkl + retrain_metadata.json
                     └── Update tabel model_metrics
 ```

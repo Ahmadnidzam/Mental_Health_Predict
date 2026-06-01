@@ -1,14 +1,14 @@
 # Mental Health Risk Prediction Web
 
-Sistem web untuk prediksi tingkat risiko kesehatan mental (Rendah / Sedang / Tinggi) berbasis ensemble dari tiga algoritma machine learning klasik: **K-Nearest Neighbors**, **Support Vector Machine**, dan **Decision Tree**. Hasil akhir ditentukan dengan majority voting.
+Sistem web untuk prediksi tingkat risiko kesehatan mental (Rendah / Sedang / Tinggi) berbasis pemilihan model tunggal dari 6 opsi machine learning klasik: **KNN**, **KNN + HPO**, **SVM**, **SVM + HPO**, **Decision Tree**, dan **Decision Tree + HPO**.
 
 Dibangun dengan Laravel 12 (PHP) di sisi backend, scikit-learn (Python) untuk inferensi ML, dan Bootstrap 5 di sisi frontend.
 
 ## Fitur
 
-Halaman beranda yang menampilkan ringkasan dataset dan model dengan akurasi tertinggi. Form prediksi 24 fitur input yang dikelompokkan jadi lima section (demografi, gaya hidup, pekerjaan/akademik, indikator kesehatan, riwayat medis). Halaman riwayat berisi semua prediksi yang pernah dilakukan beserta detail per record. Halaman info model menampilkan metrik tiap algoritma (accuracy, precision, recall, F1) dengan progress bar dan accordion penjelasan tiap algoritma. Halaman tentang berisi visi-misi, tech stack, dan disclaimer medis.
+Halaman beranda yang menampilkan ringkasan dataset dan model dengan akurasi tertinggi. Form prediksi 24 fitur input yang dikelompokkan jadi lima section (demografi, gaya hidup, pekerjaan/akademik, indikator kesehatan, riwayat medis) dan pengguna memilih salah satu dari 6 model. Halaman riwayat berisi semua prediksi yang pernah dilakukan beserta detail per record. Halaman info model menampilkan metrik tiap algoritma (accuracy, precision, recall, F1) dengan progress bar dan accordion penjelasan tiap algoritma. Halaman tentang berisi visi-misi, tech stack, dan disclaimer medis.
 
-Data flow: form di-submit via AJAX, Laravel validasi 24 input, lalu memanggil script Python `predict.py` via Symfony Process. Script tersebut me-load model `.pkl` (KNN, SVM, DT) plus scaler dan encoders, melakukan preprocessing, prediksi tiga model paralel, lalu mengembalikan JSON. Laravel menyimpan ke tabel `predictions` dan menampilkan tiga kartu hasil + final majority vote di browser.
+Data flow: form di-submit via AJAX, Laravel validasi 24 input, lalu memanggil script Python `predict.py` via Symfony Process. Script tersebut me-load model `.pkl` sesuai pilihan user, plus scaler dan encoders, melakukan preprocessing, lalu mengembalikan JSON berisi prediksi dan confidence. Laravel menyimpan ke tabel `predictions` bersama `selected_model` dan menampilkan hasil di browser.
 
 ## Stack
 
@@ -110,7 +110,7 @@ mental-health-prediction/
 ├── routes/web.php
 ├── storage/models/
 │   ├── data/mental_health_risk_dataset.csv  <- Dataset training
-│   ├── train_models.py                <- Script training (run sekali)
+│   ├── train_models.py                <- Script training 6 model
 │   ├── predict.py                     <- Script inferensi (dipanggil tiap prediksi)
 │   └── *.pkl                          <- Model artifacts (di-gitignore)
 └── .env
@@ -118,7 +118,7 @@ mental-health-prediction/
 
 ## Tabel Database
 
-`predictions` — menyimpan setiap hasil prediksi beserta input fitur dalam JSON, prediksi tiap model + confidence, dan hasil majority vote.
+`predictions` — menyimpan setiap hasil prediksi beserta input fitur dalam JSON, model terpilih, final prediction, dan confidence.
 
 `model_metrics` — menyimpan metrik training tiap algoritma. Di-seed dari `storage/models/train_results.json`.
 
@@ -126,9 +126,12 @@ mental-health-prediction/
 
 | Algoritma | Accuracy | Precision | Recall | F1-Score |
 |-----------|----------|-----------|--------|----------|
-| K-Nearest Neighbors (k=7) | ~64% | ~63% | ~64% | ~62% |
-| Support Vector Machine (RBF) | ~80% | ~81% | ~80% | ~80% |
-| Decision Tree (max_depth=10) | ~97% | ~97% | ~97% | ~97% |
+| K-Nearest Neighbors | 67.91% | 72.87% | 67.91% | 63.02% |
+| K-Nearest Neighbors + HPO | 68.18% | 73.08% | 68.18% | 63.23% |
+| Support Vector Machine | 81.76% | 81.88% | 81.76% | 81.73% |
+| Support Vector Machine + HPO | 81.76% | 81.88% | 81.76% | 81.73% |
+| Decision Tree | 99.26% | 99.25% | 99.26% | 99.25% |
+| Decision Tree + HPO | 99.59% | 99.59% | 99.59% | 99.59% |
 
 Catatan: Decision Tree mendominasi karena dataset ini punya threshold-rule yang relatif jelas. Untuk evaluasi yang lebih realistis, pertimbangkan training dengan full dataset dan eksperimen dengan `max_depth` yang lebih kecil agar tidak overfit.
 

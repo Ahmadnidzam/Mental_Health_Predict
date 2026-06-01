@@ -5,7 +5,7 @@
 @section('content')
 <div class="container-lg">
     <h2 class="mb-4"><i class="bi bi-cpu"></i> Informasi Model Machine Learning</h2>
-    <p class="text-muted mb-4">Performa setiap algoritma pada test set saat training.</p>
+    <p class="text-muted mb-4">Performa setiap algoritma pada test set saat training. Semua model aktif: KNN, KNN+HPO, SVM, SVM+HPO, DT, dan DT+HPO.</p>
 
     @if ($metrics->isEmpty())
         <div class="alert alert-warning">
@@ -107,7 +107,7 @@
             </h2>
             <div id="ensembleDetail" class="accordion-collapse collapse" data-bs-parent="#algoAccordion">
                 <div class="accordion-body">
-                    <p>Hasil akhir prediksi ditentukan dengan <strong>majority voting</strong> dari ketiga model. Jika ketiganya berbeda, dipilih prediksi dengan confidence tertinggi sebagai tiebreaker.</p>
+                    <p>Hasil akhir prediksi ditentukan dari model yang dipilih user. Sistem menampilkan prediksi dan confidence untuk model aktif tersebut.</p>
                 </div>
             </div>
         </div>

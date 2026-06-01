@@ -22,8 +22,6 @@ class PredictionController extends Controller
         'therapy_history', 'substance_use',
     ];
 
-    private const AVAILABLE_MODELS = ['knn', 'knn_hpo', 'svm', 'svm_hpo'];
-
     private const ALL_MODELS = ['knn', 'knn_hpo', 'svm', 'svm_hpo', 'dt', 'dt_hpo'];
 
     public function showForm()

@@ -14,7 +14,7 @@
                     Deteksi Dini Risiko<br>Kesehatan Mental
                 </h1>
                 <p style="font-size:18px; font-weight:300; color:var(--charcoal); line-height:1.6; max-width:520px; margin-bottom:36px;">
-                    Sistem prediksi berbasis Machine Learning menggunakan KNN, SVM, dan Decision Tree
+                    Sistem prediksi berbasis Machine Learning menggunakan 6 model klasik
                     untuk mengenali kemungkinan risiko kesehatan mental dari 24 faktor psikososial.
                 </p>
                 <div class="d-flex flex-wrap gap-3">
@@ -43,7 +43,7 @@
         <h2 style="font-size:36px; font-weight:500; text-align:center; margin-bottom:48px; color:var(--ink-deep);">Kenapa menggunakan sistem ini?</h2>
         <div class="row g-4">
             @foreach ([
-                ['bi-cpu',            '3 Algoritma ML',        'KNN, SVM, dan Decision Tree dijalankan dengan majority voting untuk hasil yang lebih robust.'],
+                ['bi-cpu',            '6 Opsi Model',          'KNN, KNN+HPO, SVM, SVM+HPO, Decision Tree, dan DT+HPO bisa dipilih langsung.'],
                 ['bi-clipboard-data', '24 Fitur Komprehensif', 'Demografi, gaya hidup, tekanan kerja/akademis, indikator kesehatan, dan riwayat medis.'],
                 ['bi-graph-up',       'Riwayat Tersimpan',     'Semua prediksi tersimpan di database — bandingkan kondisi Anda dari waktu ke waktu.'],
             ] as [$icon, $title, $desc])
