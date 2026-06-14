@@ -4,6 +4,14 @@ set -e
 
 cd /var/www/html
 
+# APP_KEY wajib. Idealnya di-set via environment di Coolify (persisten).
+# Kalau kosong, generate fallback SEBELUM config:cache (cache membekukan APP_KEY).
+if [ -z "$APP_KEY" ]; then
+    echo "==> APP_KEY kosong — generate fallback (disarankan set di environment Coolify)."
+    [ -f .env ] || cp .env.production.example .env
+    php artisan key:generate --force
+fi
+
 echo "==> Caching config..."
 php artisan config:cache || true
 php artisan route:cache || true
@@ -37,5 +45,5 @@ fi
 # Pastikan ownership benar setelah training (file .pkl baru)
 chown -R www-data:www-data storage/models /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true
 
-echo "==> Starting Apache..."
+echo "==> Starting supervisor (Apache + queue worker)..."
 exec "$@"

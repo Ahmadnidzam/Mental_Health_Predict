@@ -7,7 +7,9 @@ use App\Models\Prediction;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 class PredictionController extends Controller
 {
@@ -31,33 +33,10 @@ class PredictionController extends Controller
 
     public function predict(Request $request)
     {
-        $rules = [
-            'model'                            => 'required|string|in:' . implode(',', self::ALL_MODELS),
-            'age'                              => 'required|numeric|min:1|max:120',
-            'gender'                           => 'required|string|in:Male,Female,Other',
-            'marital_status'                   => 'required|string|in:Single,Married,Divorced',
-            'education_level'                  => 'required|string|in:High School,Bachelor,Master,PhD',
-            'employment_status'                => 'required|string|in:Employed,Unemployed,Self-Employed,Student',
-            'sleep_hours'                      => 'required|numeric|min:0|max:24',
-            'physical_activity_hours_per_week' => 'required|numeric|min:0|max:168',
-            'screen_time_hours_per_day'        => 'required|numeric|min:0|max:24',
-            'social_support_score'             => 'required|integer|min:0|max:10',
-            'work_stress_level'                => 'required|integer|min:0|max:10',
-            'academic_pressure_level'          => 'required|integer|min:0|max:10',
-            'job_satisfaction_score'           => 'required|integer|min:0|max:10',
-            'financial_stress_level'           => 'required|integer|min:0|max:10',
-            'working_hours_per_week'           => 'required|integer|min:0|max:168',
-            'anxiety_score'                    => 'required|integer|min:0|max:10',
-            'depression_score'                 => 'required|integer|min:0|max:10',
-            'stress_level'                     => 'required|integer|min:0|max:10',
-            'mood_swings_frequency'            => 'required|integer|min:0|max:10',
-            'concentration_difficulty_level'   => 'required|integer|min:0|max:10',
-            'panic_attack_history'             => 'required|in:0,1',
-            'family_history_mental_illness'    => 'required|in:0,1',
-            'previous_mental_health_diagnosis' => 'required|in:0,1',
-            'therapy_history'                  => 'required|in:0,1',
-            'substance_use'                    => 'required|in:0,1',
-        ];
+        $rules = array_merge(
+            ['model' => 'required|string|in:' . implode(',', self::ALL_MODELS)],
+            $this->featureRules()
+        );
 
         $validated = $request->validate($rules);
 
@@ -78,6 +57,8 @@ class PredictionController extends Controller
             return back()->withInput()->with('error', $message);
         }
 
+        $countBefore = Prediction::count();
+
         $prediction = Prediction::create([
             'user_id'          => auth()->id(),
             'selected_model'   => $output['model'],
@@ -86,7 +67,7 @@ class PredictionController extends Controller
             'confidence'       => $output['confidence'],
         ]);
 
-        $this->maybeDispatchRetrain();
+        $this->maybeDispatchRetrain($countBefore);
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -166,16 +147,18 @@ class PredictionController extends Controller
         }
         fclose($handle);
 
-        // Parse setiap baris ke array fitur, catat baris yang kurang kolom
+        // Parse + validasi tiap baris. Baris invalid langsung jadi entri error,
+        // hanya baris valid yang dikirim ke Python.
         $featuresList = [];   // [['age'=>..., 'gender'=>..., ...], ...]
         $rowNumbers   = [];   // nomor baris sumber per index
-        $skipped      = [];   // baris yang di-skip karena kurang kolom
+        $results      = [];   // hasil akhir (error + sukses), diurut nanti
+        $rules        = $this->featureRules();
         $rowNum       = $startRowNum - 1;
 
         foreach ($pendingRows as $row) {
             $rowNum++;
             if (count($row) < count(self::FEATURE_FIELDS)) {
-                $skipped[] = $rowNum;
+                $results[] = ['row' => $rowNum, 'status' => 'error', 'message' => 'Jumlah kolom kurang dari ' . count(self::FEATURE_FIELDS) . '.'];
                 continue;
             }
 
@@ -190,56 +173,83 @@ class PredictionController extends Controller
                 $features[$field] = trim($data[$field] ?? '');
             }
 
+            $validator = Validator::make($features, $rules);
+            if ($validator->fails()) {
+                $results[] = [
+                    'row'     => $rowNum,
+                    'status'  => 'error',
+                    'message' => implode(' ', $validator->errors()->all()),
+                    'input'   => $features,
+                ];
+                continue;
+            }
+
             $featuresList[] = $features;
             $rowNumbers[]   = $rowNum;
         }
 
         if (empty($featuresList)) {
-            return response()->json(['status' => 'error', 'message' => 'Tidak ada baris data yang valid di CSV.'], 422);
-        }
-
-        // Satu panggilan Python untuk semua baris (batch mode)
-        $batchPayload = ['model' => $selectedModel, 'rows' => $featuresList];
-        $batchOutput  = $this->callPythonPredict($batchPayload);
-
-        if (! is_array($batchOutput) || ($batchOutput['status'] ?? null) !== 'success') {
             return response()->json([
                 'status'  => 'error',
-                'message' => $batchOutput['message'] ?? 'Python batch predict gagal.',
-            ], 500);
+                'message' => 'Tidak ada baris data yang valid di CSV.',
+                'results' => $results,
+            ], 422);
         }
 
-        $pyResults   = $batchOutput['results'] ?? [];
-        $results     = [];
-        $countBefore = Prediction::count();
+        // Prediksi batch — chunk agar memori & ukuran payload tetap terjaga.
+        $chunkSize = 500;
+        $pyResults = [];
+        foreach (array_chunk($featuresList, $chunkSize) as $chunk) {
+            $batchOutput = $this->callPythonPredict(['model' => $selectedModel, 'rows' => $chunk]);
 
-        foreach ($featuresList as $i => $features) {
-            $srcRow = $rowNumbers[$i];
-            $py     = $pyResults[$i] ?? null;
-
-            if (! $py) {
-                $results[] = ['row' => $srcRow, 'status' => 'error', 'message' => 'Tidak ada hasil dari Python.', 'input' => $features];
-                continue;
+            if (! is_array($batchOutput) || ($batchOutput['status'] ?? null) !== 'success') {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => $batchOutput['message'] ?? 'Python batch predict gagal.',
+                ], 500);
             }
 
-            $prediction = Prediction::create([
-                'user_id'          => auth()->id(),
-                'selected_model'   => $selectedModel,
-                'input_features'   => $features,
-                'final_prediction' => $py['prediction'],
-                'confidence'       => $py['confidence'],
-            ]);
-
-            $results[] = [
-                'row'              => $srcRow,
-                'status'           => 'success',
-                'id'               => $prediction->id,
-                'final_prediction' => $py['prediction'],
-                'label'            => $py['label'],
-                'confidence'       => $py['confidence'],
-                'input'            => $features,
-            ];
+            foreach ($batchOutput['results'] ?? [] as $r) {
+                $pyResults[] = $r;
+            }
         }
+
+        $countBefore = Prediction::count();
+        $userId      = auth()->id();
+
+        // Simpan semua hasil dalam satu transaction → atomik.
+        DB::transaction(function () use ($featuresList, $rowNumbers, $pyResults, $selectedModel, $userId, &$results) {
+            foreach ($featuresList as $i => $features) {
+                $srcRow = $rowNumbers[$i];
+                $py     = $pyResults[$i] ?? null;
+
+                if (! $py) {
+                    $results[] = ['row' => $srcRow, 'status' => 'error', 'message' => 'Tidak ada hasil dari Python.', 'input' => $features];
+                    continue;
+                }
+
+                $prediction = Prediction::create([
+                    'user_id'          => $userId,
+                    'selected_model'   => $selectedModel,
+                    'input_features'   => $features,
+                    'final_prediction' => $py['prediction'],
+                    'confidence'       => $py['confidence'],
+                ]);
+
+                $results[] = [
+                    'row'              => $srcRow,
+                    'status'           => 'success',
+                    'id'               => $prediction->id,
+                    'final_prediction' => $py['prediction'],
+                    'label'            => $py['label'],
+                    'confidence'       => $py['confidence'],
+                    'input'            => $features,
+                ];
+            }
+        });
+
+        // Urutkan hasil sesuai nomor baris sumber.
+        usort($results, fn ($a, $b) => $a['row'] <=> $b['row']);
 
         $this->maybeDispatchRetrain($countBefore);
 
@@ -249,6 +259,39 @@ class PredictionController extends Controller
             'total'   => count($results),
             'results' => $results,
         ]);
+    }
+
+    /**
+     * Aturan validasi 24 fitur — dipakai jalur manual & jalur CSV.
+     */
+    private function featureRules(): array
+    {
+        return [
+            'age'                              => 'required|numeric|min:1|max:120',
+            'gender'                           => 'required|string|in:Male,Female,Other',
+            'marital_status'                   => 'required|string|in:Single,Married,Divorced',
+            'education_level'                  => 'required|string|in:High School,Bachelor,Master,PhD',
+            'employment_status'                => 'required|string|in:Employed,Unemployed,Self-Employed,Student',
+            'sleep_hours'                      => 'required|numeric|min:0|max:24',
+            'physical_activity_hours_per_week' => 'required|numeric|min:0|max:168',
+            'screen_time_hours_per_day'        => 'required|numeric|min:0|max:24',
+            'social_support_score'             => 'required|integer|min:0|max:10',
+            'work_stress_level'                => 'required|integer|min:0|max:10',
+            'academic_pressure_level'          => 'required|integer|min:0|max:10',
+            'job_satisfaction_score'           => 'required|integer|min:0|max:10',
+            'financial_stress_level'           => 'required|integer|min:0|max:10',
+            'working_hours_per_week'           => 'required|integer|min:0|max:168',
+            'anxiety_score'                    => 'required|integer|min:0|max:10',
+            'depression_score'                 => 'required|integer|min:0|max:10',
+            'stress_level'                     => 'required|integer|min:0|max:10',
+            'mood_swings_frequency'            => 'required|integer|min:0|max:10',
+            'concentration_difficulty_level'   => 'required|integer|min:0|max:10',
+            'panic_attack_history'             => 'required|in:0,1',
+            'family_history_mental_illness'    => 'required|in:0,1',
+            'previous_mental_health_diagnosis' => 'required|in:0,1',
+            'therapy_history'                  => 'required|in:0,1',
+            'substance_use'                    => 'required|in:0,1',
+        ];
     }
 
     public function show(Prediction $prediction): JsonResponse
@@ -271,7 +314,7 @@ class PredictionController extends Controller
 
     private function maybeDispatchRetrain(int $countBefore = -1): void
     {
-        $retainEvery = (int) env('RETRAIN_EVERY', 50);
+        $retainEvery = (int) config('services.retrain.every', 50);
         $total       = Prediction::count();
 
         $shouldRetrain = $countBefore < 0
@@ -286,7 +329,7 @@ class PredictionController extends Controller
 
     private function callPythonPredict(array $payload): ?array
     {
-        $python  = env('PYTHON_PATH', 'python');
+        $python  = config('services.python.path', 'python');
         $script  = storage_path('models/predict.py');
 
         if (! file_exists($script)) {
@@ -307,9 +350,8 @@ class PredictionController extends Controller
 
         $proc = proc_open([$python, $script, '--stdin'], $descriptors, $pipes, null, null);
 
-        @unlink($tmpIn);
-
         if (! is_resource($proc)) {
+            @unlink($tmpIn);
             return ['status' => 'error', 'message' => 'Gagal menjalankan Python process.'];
         }
 
@@ -318,6 +360,10 @@ class PredictionController extends Controller
         fclose($pipes[1]);
         fclose($pipes[2]);
         $exitCode = proc_close($proc);
+
+        // Hapus tempfile setelah proc selesai — di Windows file tidak bisa
+        // di-unlink selama child masih memegangnya sebagai stdin.
+        @unlink($tmpIn);
 
         if (config('app.debug')) {
             Log::debug('[PREDICT] Python call', [

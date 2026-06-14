@@ -13,26 +13,32 @@
     <style>
         /* ── Design Tokens ── */
         :root {
-            --primary:       #0562E2;
-            --primary-deep:  #0143B5;
-            --primary-soft:  rgba(5, 98, 226, 0.10);
-            --ink-button:    #1c1e21;
-            --canvas:        #FFFFFF;
-            --surface-soft:  #F0F2F5;
-            --hairline:      #CDD0D4;
-            --hairline-soft: #E4E6EB;
-            --ink-deep:      #1c1e21;
-            --ink:           #3c4043;
-            --charcoal:      #606770;
-            --slate:         #8A8D91;
-            --steel:         #989A9C;
-            --stone:         #BEC3C9;
-            --success:       #42B72A;
-            --warning:       #F7B928;
-            --critical:      #E53935;
-            --attention:     #FF9500;
+            /* Brand & accent */
+            --primary:        #0562E2;  /* Cobalt — buy-now CTA only */
+            --primary-deep:   #0143B5;  /* Deep cobalt — pressed / radio-selected */
+            --primary-soft:   rgba(5, 98, 226, 0.10);
+            --fb-blue:        #1877F2;  /* Selected radio/checkbox + input activation */
+            --meta-link:      #385898;  /* Legacy nav/footer link */
+            --oculus-purple:  #6B3FA0;  /* VR category accent */
+            --ink-button:     #1c1e21;
+            --canvas:         #FFFFFF;
+            --surface-soft:   #F0F2F5;
+            --hairline:       #CDD0D4;
+            --hairline-soft:  #E4E6EB;
+            --ink-deep:       #1c1e21;
+            --ink:            #3c4043;
+            --charcoal:       #606770;
+            --slate:          #8A8D91;
+            --steel:          #989A9C;
+            --stone:          #BEC3C9;
+            --success:        #42B72A;
+            --attention:      #FF9500;
+            --warning:        #F7B928;
+            --critical:       #E53935;
+            --critical-strong:#C62828;  /* Error border + inline error label */
 
             /* Radius */
+            --r-xs:     2px;
             --r-sm:     4px;
             --r-md:     6px;
             --r-lg:     8px;
@@ -41,6 +47,21 @@
             --r-xxxl:   32px;
             --r-feature:40px;
             --r-full:   100px;
+
+            /* Spacing — 4px base, 8px primary step */
+            --space-xxs:        4px;
+            --space-xs:         8px;
+            --space-sm:         10px;
+            --space-md:         12px;
+            --space-base:       16px;
+            --space-lg:         20px;
+            --space-xl:         24px;
+            --space-xxl:        32px;
+            --space-xxxl:       40px;
+            --space-section-sm: 48px;
+            --space-section:    64px;
+            --space-section-lg: 80px;
+            --space-hero:       120px;
         }
 
         /* ── Base ── */
@@ -197,13 +218,13 @@
         }
         .form-control::placeholder { color: var(--steel); }
         .form-control:focus, .form-select:focus {
-            border: 2px solid var(--primary);
+            border: 2px solid var(--fb-blue);
             box-shadow: none;
             outline: none;
             background: var(--canvas);
             color: var(--ink-deep);
         }
-        .form-control.is-invalid { border-color: var(--critical); }
+        .form-control.is-invalid, .form-select.is-invalid { border: 1px solid var(--critical-strong); }
         .form-label {
             font-size: 14px;
             font-weight: 700;
@@ -215,8 +236,8 @@
             border-radius: var(--r-sm);
             border-color: var(--hairline);
         }
-        .form-check-input:checked { background-color: var(--primary); border-color: var(--primary); }
-        .invalid-feedback { color: var(--critical); font-size: 13px; font-weight: 400; margin-top: 4px; }
+        .form-check-input:checked { background-color: var(--fb-blue); border-color: var(--fb-blue); }
+        .invalid-feedback { color: var(--critical-strong); font-size: 13px; font-weight: 400; margin-top: 4px; }
         .input-group .form-control { border-radius: var(--r-lg) 0 0 var(--r-lg); }
         .input-group .btn { border-radius: 0 var(--r-lg) var(--r-lg) 0; height: 44px; padding: 0 14px; }
 
@@ -230,7 +251,7 @@
         }
         .table td { border-color: var(--hairline-soft); padding: 14px 16px; vertical-align: middle; }
         .table-hover tbody tr:hover { background: var(--surface-soft); }
-        .table-container { border: 1px solid var(--hairline-soft); border-radius: var(--r-xl); overflow: hidden; }
+        .table-container { border: 1px solid var(--hairline-soft); border-radius: var(--r-xl); overflow-x: auto; overflow-y: hidden; }
 
         /* ── Badges ── */
         .badge {
@@ -309,12 +330,23 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <!-- Center nav pills -->
                 <div class="d-flex flex-wrap align-items-center gap-2 me-auto">
-                    <a class="nav-pill-tab {{ request()->routeIs('home') ? 'active' : '' }}" href="{{ route('home') }}">Beranda</a>
-                    <a class="nav-pill-tab {{ request()->routeIs('models') ? 'active' : '' }}" href="{{ route('models') }}">Model</a>
-                    <a class="nav-pill-tab {{ request()->routeIs('about') ? 'active' : '' }}" href="{{ route('about') }}">Tentang</a>
                     @auth
-                        <a class="nav-pill-tab {{ request()->routeIs('predict.*') ? 'active' : '' }}" href="{{ route('predict.form') }}">Prediksi</a>
-                        <a class="nav-pill-tab {{ request()->routeIs('history') ? 'active' : '' }}" href="{{ route('history') }}">Riwayat</a>
+                        @if (auth()->user()->isAdmin())
+                            <a class="nav-pill-tab {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}" href="{{ route('admin.dashboard') }}">Dashboard</a>
+                            <a class="nav-pill-tab {{ request()->routeIs('admin.models.*') ? 'active' : '' }}" href="{{ route('admin.models.index') }}">Kontrol Model</a>
+                            <a class="nav-pill-tab {{ request()->routeIs('admin.predictions.*') ? 'active' : '' }}" href="{{ route('admin.predictions.index') }}">Kelola Riwayat</a>
+                            <a class="nav-pill-tab {{ request()->routeIs('admin.users.*') ? 'active' : '' }}" href="{{ route('admin.users.index') }}">Kelola Pengguna</a>
+                        @else
+                            <a class="nav-pill-tab {{ request()->routeIs('home') ? 'active' : '' }}" href="{{ route('home') }}">Beranda</a>
+                            <a class="nav-pill-tab {{ request()->routeIs('models') ? 'active' : '' }}" href="{{ route('models') }}">Model</a>
+                            <a class="nav-pill-tab {{ request()->routeIs('about') ? 'active' : '' }}" href="{{ route('about') }}">Tentang</a>
+                            <a class="nav-pill-tab {{ request()->routeIs('predict.*') ? 'active' : '' }}" href="{{ route('predict.form') }}">Prediksi</a>
+                            <a class="nav-pill-tab {{ request()->routeIs('history') ? 'active' : '' }}" href="{{ route('history') }}">Riwayat</a>
+                        @endif
+                    @else
+                        <a class="nav-pill-tab {{ request()->routeIs('home') ? 'active' : '' }}" href="{{ route('home') }}">Beranda</a>
+                        <a class="nav-pill-tab {{ request()->routeIs('models') ? 'active' : '' }}" href="{{ route('models') }}">Model</a>
+                        <a class="nav-pill-tab {{ request()->routeIs('about') ? 'active' : '' }}" href="{{ route('about') }}">Tentang</a>
                     @endauth
                 </div>
 

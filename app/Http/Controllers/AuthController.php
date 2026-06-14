@@ -14,7 +14,9 @@ class AuthController extends Controller
     public function showLogin(): View|RedirectResponse
     {
         if (Auth::check()) {
-            return redirect()->route('home');
+            return auth()->user()?->isAdmin()
+                ? redirect()->route('admin.dashboard')
+                : redirect()->route('home');
         }
         return view('auth.login');
     }
@@ -30,7 +32,10 @@ class AuthController extends Controller
 
         if (Auth::attempt($credentials, $remember)) {
             $request->session()->regenerate();
-            return redirect()->intended(route('home'))->with('success', 'Selamat datang, ' . Auth::user()->name . '!');
+            $user = Auth::user();
+            $target = $user?->isAdmin() ? route('admin.dashboard') : route('home');
+
+            return redirect()->intended($target)->with('success', 'Selamat datang, ' . $user->name . '!');
         }
 
         return back()->withInput($request->only('email'))->withErrors([
@@ -41,7 +46,9 @@ class AuthController extends Controller
     public function showRegister(): View|RedirectResponse
     {
         if (Auth::check()) {
-            return redirect()->route('home');
+            return auth()->user()?->isAdmin()
+                ? redirect()->route('admin.dashboard')
+                : redirect()->route('home');
         }
         return view('auth.register');
     }
@@ -63,7 +70,7 @@ class AuthController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect()->route('home')->with('success', 'Akun berhasil dibuat. Selamat datang, ' . $user->name . '!');
+        return redirect()->route($user->isAdmin() ? 'admin.dashboard' : 'home')->with('success', 'Akun berhasil dibuat. Selamat datang, ' . $user->name . '!');
     }
 
     public function logout(Request $request): RedirectResponse

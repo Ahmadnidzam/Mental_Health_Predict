@@ -35,4 +35,19 @@ return [
         ],
     ],
 
+    'python' => [
+        'path' => env('PYTHON_PATH', 'python'),
+    ],
+
+    'retrain' => [
+        'every' => (int) env('RETRAIN_EVERY', 50),
+    ],
+
+    'train' => [
+        // Batas baris training (subsample stratified) agar GridSearch SVM tetap
+        // feasible di dataset besar. 0 = tanpa batas. Diteruskan ke train_models.py
+        // via --max-rows oleh SeedBaseModel & RetrainModelsJob.
+        'max_rows' => (int) env('TRAIN_MAX_ROWS', 3000),
+    ],
+
 ];

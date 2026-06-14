@@ -372,7 +372,7 @@
     transition: border-color .15s, border-width .1s;
 }
 .radio-option input:checked + .radio-option__inner {
-    border: 2px solid var(--primary);
+    border: 2px solid var(--primary-deep);
     background: var(--primary-soft);
 }
 .radio-option:not(.radio-option--disabled):hover .radio-option__inner { border-color: var(--primary); }
@@ -417,6 +417,10 @@ const modelLabels = {
     'svm':'Support Vector Machine','svm_hpo':'SVM + HPO',
     'dt':'Decision Tree','dt_hpo':'Decision Tree + HPO',
 };
+
+// Escape agar data dari CSV/respons tidak tersuntik sebagai HTML.
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 // Tooltips
 document.addEventListener('DOMContentLoaded', () => {
@@ -465,7 +469,7 @@ document.getElementById('predictionForm').addEventListener('submit', async funct
         spin.style.display = 'none';
 
         if (!res.ok || json.status !== 'success') {
-            out.innerHTML = `<div class="alert alert-danger">${json.message||'Terjadi kesalahan'}</div>`;
+            out.innerHTML = `<div class="alert alert-danger">${esc(json.message)||'Terjadi kesalahan'}</div>`;
             return;
         }
 
@@ -559,7 +563,7 @@ document.getElementById('csvForm').addEventListener('submit', async function(e) 
         spin.style.display = 'none';
 
         if (!res.ok || json.status !== 'success') {
-            out.innerHTML = `<div class="alert alert-danger">${json.message||'Terjadi kesalahan'}</div>`;
+            out.innerHTML = `<div class="alert alert-danger">${esc(json.message)||'Terjadi kesalahan'}</div>`;
             return;
         }
 
@@ -573,8 +577,8 @@ document.getElementById('csvForm').addEventListener('submit', async function(e) 
                 const bg = riskBg[r.final_prediction]??'#ccc', fg=riskFg[r.final_prediction]??'#000';
                 rows += `<tr>
                     <td style="color:var(--slate);font-size:13px;">${r.row}</td>
-                    <td style="font-weight:500;">${r.input.age??'—'}</td>
-                    <td>${r.input.gender??'—'}</td>
+                    <td style="font-weight:500;">${esc(r.input.age)||'—'}</td>
+                    <td>${esc(r.input.gender)||'—'}</td>
                     <td><span style="padding:3px 10px;border-radius:var(--r-full);background:${bg};color:${fg};font-size:12px;font-weight:700;">${riskText[r.final_prediction]??'?'}</span></td>
                     <td style="font-weight:700;color:var(--ink-deep);">${(r.confidence*100).toFixed(2)}%</td>
                     <td><span style="font-size:12px;font-weight:700;color:var(--success);">Berhasil</span></td>
@@ -582,7 +586,7 @@ document.getElementById('csvForm').addEventListener('submit', async function(e) 
             } else {
                 rows += `<tr style="background:rgba(229,57,53,.04);">
                     <td style="color:var(--slate);font-size:13px;">${r.row}</td>
-                    <td colspan="4" style="font-size:13px;color:var(--critical);">${r.message}</td>
+                    <td colspan="4" style="font-size:13px;color:var(--critical);">${esc(r.message)}</td>
                     <td><span style="font-size:12px;font-weight:700;color:var(--critical);">Gagal</span></td>
                 </tr>`;
             }

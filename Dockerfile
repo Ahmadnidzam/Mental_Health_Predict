@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libxml2-dev libonig-dev libzip-dev \
         default-mysql-client \
         python3 python3-pip python3-venv \
+        supervisor \
     && rm -rf /var/lib/apt/lists/*
 
 # ==============================================================================
@@ -75,6 +76,10 @@ RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cac
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Supervisor: jalankan Apache + queue worker bersamaan
+COPY supervisord.conf /etc/supervisor/supervisord.conf
+RUN mkdir -p /var/log/supervisor
+
 EXPOSE 80
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["apache2-foreground"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]

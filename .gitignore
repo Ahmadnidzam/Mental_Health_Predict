@@ -45,3 +45,6 @@ __pycache__/
 # Folder rules berisi dokumentasi & dataset master untuk training
 # (file rules.zip dari user awal - sudah ada di /storage/models/data/)
 /rules.zip
+
+storage/models/data/*.bak
+/plan/

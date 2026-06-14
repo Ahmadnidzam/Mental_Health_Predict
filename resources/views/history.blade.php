@@ -114,6 +114,10 @@ const modelLabels = {
     'dt':'Decision Tree','dt_hpo':'Decision Tree + HPO',
 };
 
+// Escape agar data tersimpan tidak tersuntik sebagai HTML.
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
 document.getElementById('detailModal')?.addEventListener('show.bs.modal', async (event) => {
     const id   = event.relatedTarget?.getAttribute('data-id');
     const body = document.getElementById('detailContent');
@@ -132,8 +136,8 @@ document.getElementById('detailModal')?.addEventListener('show.bs.modal', async 
 
         const rows = Object.entries(data.input_features||{}).map(([k,v])=>`
             <tr>
-                <td style="font-size:13px; color:var(--slate); width:55%;">${k}</td>
-                <td style="font-size:14px; font-weight:500; color:var(--ink-deep);">${v}</td>
+                <td style="font-size:13px; color:var(--slate); width:55%;">${esc(k)}</td>
+                <td style="font-size:14px; font-weight:500; color:var(--ink-deep);">${esc(v)}</td>
             </tr>
         `).join('');
 

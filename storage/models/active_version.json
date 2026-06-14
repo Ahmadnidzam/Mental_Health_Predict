@@ -1,0 +1,26 @@
+{
+    "knn": {
+        "version_id": 1,
+        "path": "versions/1"
+    },
+    "knn_hpo": {
+        "version_id": 1,
+        "path": "versions/1"
+    },
+    "svm": {
+        "version_id": 4,
+        "path": "versions/4"
+    },
+    "svm_hpo": {
+        "version_id": 4,
+        "path": "versions/4"
+    },
+    "dt": {
+        "version_id": 1,
+        "path": "versions/1"
+    },
+    "dt_hpo": {
+        "version_id": 1,
+        "path": "versions/1"
+    }
+}

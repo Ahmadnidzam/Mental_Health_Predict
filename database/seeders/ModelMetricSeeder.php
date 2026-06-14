@@ -39,6 +39,12 @@ class ModelMetricSeeder extends Seeder
             $this->command->info("Saved metric: {$algorithm} (acc=" . number_format(($metrics['accuracy'] ?? 0) * 100, 2) . "%)");
         }
 
+        // Buang baris yang tidak ada di train_results.json (sisa key lama).
+        $pruned = ModelMetric::whereNotIn('algorithm', array_keys($data))->delete();
+        if ($pruned) {
+            $this->command->warn("{$pruned} baris metrik usang dibuang.");
+        }
+
         $this->command->info("Total metrik tersimpan: " . ModelMetric::count());
     }
 }

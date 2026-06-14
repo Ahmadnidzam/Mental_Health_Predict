@@ -14,6 +14,9 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // Membuat admin default dari kredensial .env
+        $this->call(AdminUserSeeder::class);
+
         // Memuat metrik model dari storage/models/train_results.json
         $this->call(ModelMetricSeeder::class);
     }

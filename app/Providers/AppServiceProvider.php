@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use Illuminate\Pagination\Paginator;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +20,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // App pakai Bootstrap 5 (CDN), bukan Tailwind — paksa paginator
+        // pakai markup Bootstrap agar tombol prev/next & ikon rapi.
+        Paginator::useBootstrapFive();
     }
 }
